@@ -668,6 +668,7 @@ renderers.produits = function(){
   var subbar = '<div class="subtabs">' +
     '<button class="'+(produitsSub==='catalogue'?'active':'')+'" onclick="setProduitsSub(\'catalogue\')">Catalogue</button>' +
     '<button class="'+(produitsSub==='ventes'?'active':'')+'" onclick="setProduitsSub(\'ventes\')">Ventes</button>' +
+    '<button class="'+(produitsSub==='boutique'?'active':'')+'" onclick="setProduitsSub(\'boutique\')">&#128722; Boutique</button>' +
     '<button class="'+(produitsSub==='achats'?'active':'')+'" onclick="setProduitsSub(\'achats\')">Achats</button>' +
     '<button class="'+(produitsSub==='commandes'?'active':'')+'" onclick="setProduitsSub(\'commandes\')">Commandes</button>' +
     '<button class="'+(produitsSub==='cockpit'?'active':'')+'" onclick="setProduitsSub(\'cockpit\')">Cockpit</button>' +
@@ -688,7 +689,7 @@ renderers.produits = function(){
         '<div class="row" style="align-items:flex-start;gap:10px;">' +
           thumb +
           '<div style="flex:1;">' +
-          '<div class="row"><span class="name" style="font-weight:600;">'+escHtml(p.nom)+(bas?' <span class="pill alert">Stock bas</span>':'')+'</span>' +
+          '<div class="row"><span class="name" style="font-weight:600;">'+escHtml(p.nom)+(bas?' <span class="pill alert">Stock bas</span>':'')+(p.categorie?' <span class="pill">En ligne</span>':'')+'</span>' +
             '<span class="row" style="gap:6px;">' +
             '<button class="icon-btn" onclick="editProduit(\''+p.id+'\')">&#9998;</button>' +
             '<button class="icon-btn danger" onclick="deleteProduit(\''+p.id+'\')">&#128465;</button>' +
@@ -738,18 +739,8 @@ renderers.produits = function(){
           : '');
 
     body = barre + list +
-      '<details id="prodFormDet" style="margin-top:14px;"><summary class="btn secondary block" style="text-align:center;list-style:none;">+ Ajouter / modifier un produit &middot; Boutique en ligne</summary>' +
+      '<details id="prodFormDet" style="margin-top:14px;"><summary class="btn secondary block" style="text-align:center;list-style:none;">+ Ajouter / modifier un produit</summary>' +
       '<div style="height:10px"></div>' +
-      '<div class="card"><div style="font-weight:600;margin-bottom:4px;">&#128722; Boutique en ligne</div>' +
-        '<div class="meta" style="margin-bottom:8px;">Crée le fichier <b>boutique.json</b> avec tes produits (nom, prix de vente, photo, catégorie, description, disponibilité). Les prix d\'achat et marges ne sont jamais publiés. <b>Seuls les produits qui ont une catégorie boutique sont publiés</b> : laisse la catégorie vide pour garder un produit hors ligne.</div>' +
-        '<button class="btn block" onclick="publierBoutique()">'+(ghConfig().token?'Publier la boutique en ligne':'Publier la boutique (boutique.json)')+'</button>' +
-        '<div class="meta" style="margin-top:8px;" id="ghStatus">'+(ghConfig().token?'Publication directe activée.':'Publication directe non activée : le fichier est téléchargé.')+'</div>' +
-        '<details style="margin-top:8px;"><summary class="meta" style="cursor:pointer;">Réglages de publication directe</summary>' +
-          '<label>Dépôt GitHub de la boutique</label><input type="text" id="ghRepo" value="'+escHtml(ghConfig().repo)+'" autocapitalize="off">' +
-          '<label>Clé d\'accès GitHub (reste sur cet appareil)</label><input type="password" id="ghToken" placeholder="'+(ghConfig().token?'Clé enregistrée (laisser vide pour garder)':'Colle la clé ici')+'" autocomplete="off">' +
-          '<button class="btn secondary block" style="margin-top:8px;" onclick="ghSave()">Enregistrer</button>' +
-          (ghConfig().token?'<button class="btn secondary block" style="margin-top:8px;" onclick="ghClear()">Retirer la clé</button>':'') +
-        '</details></div>' +
       '<div class="card" id="prodFormCard">' +
         '<label>Nom du produit</label><input type="text" id="prodNom" placeholder="Ex : Crème hydratante">' +
         '<label>Photo du produit (optionnel)</label>' +
@@ -762,15 +753,16 @@ renderers.produits = function(){
         '<label>Stock initial</label><input type="number" id="prodStock" placeholder="0">' +
         '<label>Seuil d\'alerte stock (optionnel)</label><input type="number" id="prodSeuil" placeholder="5 par défaut">' +
         '<div class="banner-note" style="margin-top:10px;">Pour la boutique en ligne (optionnel)</div>' +
-        '<label>Catégorie (boutique)</label><input type="text" id="prodCat" list="prodCatList" placeholder="Ex : Soins visage, Cheveux, Corps...">' +
-        '<datalist id="prodCatList">'+categoriesProduits().map(function(c){return '<option value="'+escHtml(c)+'">';}).join('')+'</datalist>' +
-        '<label>Description courte (boutique)</label><textarea id="prodDesc" rows="3" placeholder="Ex : Crème hydratante visage, peau douce et éclatante. 50 ml."></textarea>' +
+        '<label>Catégorie (boutique)</label>' + selectCategorie('prodCat', '', "gererNouvelleCatForm(this)") +
+                '<label>Description courte (boutique)</label><textarea id="prodDesc" rows="3" placeholder="Ex : Crème hydratante visage, peau douce et éclatante. 50 ml."></textarea>' +
         '<label>Tailles ou formats (boutique) - séparés par des virgules</label><input type="text" id="prodTailles" placeholder="Ex : S, M, L, XL ou 30 ml, 50 ml">' +
         '<label>Couleurs (boutique) - séparées par des virgules</label><input type="text" id="prodCouleurs" placeholder="Ex : Noir, Bordeaux">' +
         '<label>Ancien prix si promotion (boutique)</label><input type="number" id="prodPrixBarre" placeholder="0 = pas de promo">' +
         '<label>Étiquette (boutique)</label><select id="prodBadge"><option value="">Aucune</option><option>Nouveau</option><option>Promo</option><option>Coup de coeur</option></select>' +
         '<button class="btn block" id="prodFormBtn" onclick="saveProduit()">Ajouter au catalogue</button>' +
       '</div></details>';
+  } else if(produitsSub === 'boutique'){
+    body = boutiqueHtml();
   } else if(produitsSub === 'achats'){
     body = achatsHtml();
   } else if(produitsSub === 'commandes'){
@@ -855,7 +847,7 @@ function editProduit(id){
   document.getElementById('prodVente').value = p.prixVente;
   document.getElementById('prodStock').value = p.stock;
   document.getElementById('prodSeuil').value = p.seuil==null ? '' : p.seuil;
-  document.getElementById('prodCat').value = p.categorie || '';
+  (function(){ var sel=document.getElementById('prodCat'); var v=p.categorie||''; if(v && !Array.prototype.some.call(sel.options,function(o){return o.value===v;})){ var o=document.createElement('option'); o.value=v; o.textContent=v; sel.insertBefore(o, sel.lastElementChild); } sel.value=v; })();
   document.getElementById('prodDesc').value = p.description || '';
   document.getElementById('prodBadge').value = p.badge || '';
   document.getElementById('prodTailles').value = p.tailles || '';
@@ -1361,6 +1353,36 @@ function categoriesProduits(){
   DB.produits.forEach(function(p){ var c=(p.categorie||'').trim(); if(c && !seen[c.toLowerCase()]){ seen[c.toLowerCase()]=1; out.push(c); } });
   return out;
 }
+/* ================= CATÉGORIES DE PRODUITS (liste déroulante) ================= */
+var CATS_SUGGEREES = ['Coffrets cadeaux','Emballages','Accessoires','Parfums','Soins'];
+function listeCategories(){
+  var seen = {}, out = [];
+  CATS_SUGGEREES.concat(categoriesProduits()).forEach(function(c){
+    c = String(c||'').trim(); if(c && !seen[c.toLowerCase()]){ seen[c.toLowerCase()]=1; out.push(c); }
+  });
+  return out;
+}
+function selectCategorie(id, valeur, onchangeJs){
+  var v = String(valeur||'').trim();
+  var opts = '<option value="">— Hors ligne (pas en vente en ligne) —</option>';
+  listeCategories().forEach(function(c){
+    opts += '<option value="'+escHtml(c)+'"'+(c===v?' selected':'')+'>'+escHtml(c)+'</option>';
+  });
+  if(v && listeCategories().indexOf(v)<0) opts += '<option value="'+escHtml(v)+'" selected>'+escHtml(v)+'</option>';
+  opts += '<option value="__new__">+ Nouvelle catégorie…</option>';
+  return '<select '+(id?'id="'+id+'" ':'')+'onchange="'+onchangeJs+'">'+opts+'</select>';
+}
+function gererNouvelleCatForm(sel){
+  if(sel.value!=='__new__') return;
+  var c = nouvelleCategorie(); if(!c){ sel.value=''; return; }
+  var o = document.createElement('option'); o.value=c; o.textContent=c; o.selected=true;
+  sel.insertBefore(o, sel.lastElementChild); sel.value=c;
+}
+function nouvelleCategorie(){
+  var c = (prompt('Nom de la nouvelle catégorie :')||'').trim();
+  return c;
+}
+
 function reduirePhoto(dataUrl, max){
   return new Promise(function(resolve){
     if(!dataUrl){ resolve(null); return; }
@@ -1426,7 +1448,7 @@ async function publierBoutique(){ if(!isAdmin()){ showToast('Réservé aux admin
   var payload = { maj: new Date().toISOString(), whatsapp: '22371747415', produits: items };
   var txt = JSON.stringify(payload);
   if(ghConfig().token){
-    try{ await ghPublish(txt); showToast('Boutique mise à jour en ligne ✓ (1 minute environ)'); return; }
+    try{ await ghPublish(txt); try{localStorage.setItem('da_last_pub', new Date().toISOString());}catch(e){} showToast('Boutique mise à jour en ligne ✓ (1 minute environ)'); return; }
     catch(e){ showToast('Échec : '+e.message+' - fichier téléchargé à la place'); }
   }
   var blob = new Blob([txt], {type:'application/json'});
@@ -2235,6 +2257,51 @@ function supprimerUtilisateur(id){
   DB.utilisateurs = DB.utilisateurs.filter(function(x){return x.id!==id;});
   saveKey(KEYS.utilisateurs, DB.utilisateurs); showToast('Accès retiré'); renderers.finances();
 }
+
+/* ================= LIAISON AVEC LA BOUTIQUE EN LIGNE ================= */
+var BOUTIQUE_URL = 'https://nioro762.github.io';
+function setCategorieProduit(id, val){
+  var p = DB.produits.find(function(x){return x.id===id;}); if(!p) return;
+  if(val==='__new__'){ val = nouvelleCategorie(); if(!val){ renderers.produits(); return; } }
+  p.categorie = String(val||'').trim(); saveKey(KEYS.produits, DB.produits);
+  showToast(p.categorie ? 'En ligne : '+p.categorie : 'Retiré de la boutique'); renderers.produits();
+}
+function boutiqueHtml(){
+  var cfg = ghConfig();
+  var en = DB.produits.filter(function(p){return p.categorie && String(p.categorie).trim();});
+  var hors = DB.produits.length - en.length;
+  var last = ''; try{ last = localStorage.getItem('da_last_pub')||''; }catch(e){}
+  var rows = DB.produits.slice().sort(function(a,b){
+    var ea = a.categorie?0:1, eb = b.categorie?0:1; return ea-eb || a.nom.localeCompare(b.nom);
+  }).map(function(p){
+    var on = !!(p.categorie && String(p.categorie).trim()), r = stockRestant(p);
+    var alertes = [];
+    if(on && !p.photo) alertes.push('sans photo');
+    if(on && !p.description) alertes.push('sans description');
+    if(on && r<=0) alertes.push('épuisé : affiché comme tel');
+    return '<div class="card"><div class="row"><span style="font-weight:600;">'+escHtml(p.nom)+'</span><span class="pill'+(on?'':' alert')+'">'+(on?'En ligne':'Hors ligne')+'</span></div>' +
+      '<div class="meta">'+fmt(p.prixVente)+' &middot; stock '+r+(alertes.length?' &middot; <span style="color:var(--danger);">'+alertes.join(', ')+'</span>':'')+'</div>' +
+      '<div class="qs">'+selectCategorie('', p.categorie, "setCategorieProduit(\'"+p.id+"\',this.value)")+
+      '<button class="btn secondary small" onclick="allerEdition(\''+p.id+'\')">Fiche</button></div></div>';
+  }).join('') || '<div class="empty">Aucun produit.</div>';
+  return '<div class="card"><div style="font-weight:600;margin-bottom:6px;">&#128722; Ma boutique en ligne</div>' +
+      '<div class="row"><span class="meta">Adresse</span><a href="'+BOUTIQUE_URL+'" target="_blank" rel="noopener" style="color:var(--text);font-weight:600;">nioro762.github.io</a></div>' +
+      '<div class="row"><span class="meta">Produits en ligne</span><b>'+en.length+'</b></div>' +
+      '<div class="row"><span class="meta">Produits hors ligne</span><b>'+hors+'</b></div>' +
+      '<div class="row"><span class="meta">Dernière publication</span><span>'+(last?new Date(last).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'jamais (sur cet appareil)')+'</span></div>' +
+      '<button class="btn block" style="margin-top:10px;" onclick="publierBoutique()">'+(cfg.token?'Publier la boutique maintenant':'Préparer le fichier boutique.json')+'</button>' +
+      '<div class="meta" style="margin-top:8px;">'+(cfg.token?'Publication directe activée : la boutique se met à jour en une minute environ.':'Publication directe non activée : le fichier boutique.json est téléchargé, à déposer sur le dépôt NIORO762.github.io.')+'</div>' +
+      '<a class="btn secondary block" style="margin-top:8px;text-align:center;text-decoration:none;" href="'+BOUTIQUE_URL+'" target="_blank" rel="noopener">Voir la boutique</a>' +
+    '</div>' +
+    '<div class="banner-note">Un produit est en ligne dès qu\'il a une <b>catégorie</b>. Les prix d\'achat et les marges ne sont jamais publiés. Le stock est mis à jour à chaque publication.</div>' +
+        rows +
+    '<details class="pd" style="margin-top:12px;"><summary>Réglages de publication directe</summary>' +
+      '<div class="card" style="margin-top:8px;"><label>Dépôt GitHub de la boutique</label><input type="text" id="ghRepo" value="'+escHtml(cfg.repo)+'" autocapitalize="off">' +
+      '<label>Clé d\'accès GitHub (reste sur cet appareil)</label><input type="password" id="ghToken" placeholder="'+(cfg.token?'Clé enregistrée (laisser vide pour garder)':'Colle la clé ici')+'" autocomplete="off">' +
+      '<button class="btn secondary block" style="margin-top:8px;" onclick="ghSave()">Enregistrer</button>' +
+      (cfg.token?'<button class="btn secondary block" style="margin-top:8px;" onclick="ghClear()">Retirer la clé</button>':'') + '</div></details>';
+}
+function allerEdition(id){ produitsSub = 'catalogue'; renderers.produits(); if(id) editProduit(id); var d = document.getElementById('prodFormDet'); if(d) d.open = true; }
 
 /* ================= INIT ================= */
 loadAll().then(function(){
