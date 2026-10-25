@@ -120,6 +120,7 @@
     font-size:10px;font-family:inherit;cursor:pointer;
   }
   nav.bottomnav button .ic{display:block;font-size:17px;margin-bottom:2px;}
+  @media(max-width:480px){nav.bottomnav button{font-size:9.5px;} nav.bottomnav button .ic{font-size:15px;}}
   nav.bottomnav button.active{color:var(--gold);}
   .subtabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none;}
   .subtabs button{flex:1 0 auto;padding:9px 10px;white-space:nowrap;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit;}
@@ -160,6 +161,7 @@
   .lockscr .pad .ok{background:var(--gold);color:#111;font-weight:700;font-size:16px;}
   .lockbtn{margin-left:auto;flex:none;font-size:18px !important;padding:8px 11px !important;background:#1c1810;border:1px solid #3a3320;color:var(--gold);border-radius:20px;padding:7px 11px;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;}
   body.locked .wrap, body.locked nav.bottomnav{visibility:hidden;}
+  body.role-caisse nav.bottomnav button[data-tab="produits"],
   body.role-caisse nav.bottomnav button[data-tab="accueil"],
   body.role-caisse nav.bottomnav button[data-tab="finances"],
   body.role-caisse nav.bottomnav button[data-tab="clients"]{display:none;}
@@ -190,6 +192,7 @@
   <button data-tab="accueil" class="active"><span class="ic">&#127968;</span>Accueil</button>
   <button data-tab="soins"><span class="ic">&#10022;</span>Soins</button>
   <button data-tab="produits"><span class="ic">&#128230;</span>Produits</button>
+  <button data-tab="ventes"><span class="ic">&#128722;</span>Ventes</button>
   <button data-tab="factures"><span class="ic">&#128196;</span>Factures</button>
   <button data-tab="finances"><span class="ic">&#128176;</span>Finances</button>
   <button data-tab="clients"><span class="ic">&#128100;</span>Clients</button>
@@ -215,6 +218,7 @@ var soinsPeriode = '';
 var produitsPeriode = '';
 var resumePeriode = '';
 var prodQ = '', prodFiltre = 'tous', prodTri = 'nom';
+var facLie = true;
 var achatLignes = [], achatFourn = '', achatDepense = true;
 var cmdTexte = '', cmdAnalyse = null;
 
@@ -499,18 +503,26 @@ function stockRestant(p){
 
 /* ---------------- NAVIGATION ---------------- */
 var renderers = {};
+function updateNav(){
+  var active = document.querySelector('.view.active'); var id = active ? active.id.replace('view-','') : '';
+  document.querySelectorAll('nav.bottomnav button').forEach(function(b){
+    var t = b.getAttribute('data-tab');
+    var on = (t==='ventes') ? (id==='produits' && produitsSub==='ventes') : (t==='produits' ? (id==='produits' && produitsSub!=='ventes') : t===id);
+    b.classList.toggle('active', on);
+  });
+}
 function switchTab(tab){
   if(!SESSION){ return; }
+  if(tab==='ventes'){ tab = 'produits'; produitsSub = 'ventes'; }
+  else if(tab==='produits' && produitsSub==='ventes' && isAdmin()){ produitsSub = 'catalogue'; }
   if(!isAdmin()){
     if(['soins','produits','factures'].indexOf(tab)<0) tab = 'produits';
     soinsSub = 'journal'; produitsSub = 'ventes';
   }
   document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
   document.getElementById('view-'+tab).classList.add('active');
-  document.querySelectorAll('nav.bottomnav button').forEach(function(b){
-    b.classList.toggle('active', b.getAttribute('data-tab')===tab);
-  });
   renderers[tab]();
+  updateNav();
 }
 document.querySelectorAll('nav.bottomnav button').forEach(function(b){
   b.addEventListener('click', function(){ switchTab(b.getAttribute('data-tab')); });
@@ -649,7 +661,7 @@ function deleteSoin(id){
 function setSoinsPeriode(v){ soinsPeriode = v; renderers.soins(); }
 
 /* ================= PRODUITS (univers autonome) ================= */
-function setProduitsSub(t){ if(!isAdmin()) t='ventes'; produitsSub = t; prodPhotoTemp = null; editingProduitId = null; renderers.produits(); }
+function setProduitsSub(t){ if(!isAdmin()) t='ventes'; produitsSub = t; setTimeout(updateNav,0); prodPhotoTemp = null; editingProduitId = null; renderers.produits(); }
 
 renderers.produits = function(){
   var el = document.getElementById('view-produits');
@@ -770,7 +782,7 @@ renderers.produits = function(){
     var ventesList = DB.ventes.slice().reverse().slice(0,40).map(function(v){
       return '<div class="item"><div>' +
         '<div class="name">'+(v.numero?'<span class="meta">'+escHtml(v.numero)+'</span> ':'')+escHtml(v.produitNom)+' &times;'+v.qte+'</div>' +
-        '<div class="meta">'+v.date+(v.client?' &middot; '+escHtml(v.client):'')+'</div>' +
+        '<div class="meta">'+v.date+(v.client?' &middot; '+escHtml(v.client):'')+(v.facture?' &middot; facture '+escHtml(v.facture):'')+(v.commande?' &middot; boutique':'')+'</div>' +
         '</div><div class="row" style="gap:6px;">' +
         '<span class="price">'+fmt(v.total)+'</span>' +
         '<button class="icon-btn danger" onclick="deleteVente(\''+v.id+'\')">&#128465;</button>' +
@@ -1017,6 +1029,7 @@ renderers.factures = function(){
     '<div class="card">' +
       '<div class="row"><span>Sous-total</span><span style="font-weight:600;">'+fmt(sousTotal)+'</span></div>' +
       '<label>Remise</label><input type="number" id="facRemise" value="'+nouvelleFactureMeta.remise+'" oninput="nouvelleFactureMeta.remise=parseFloat(this.value)||0">' +
+      '<div class="row" style="margin:8px 0;"><label style="margin:0;">Enregistrer aussi '+(isSoin?'les soins dans le journal':'les ventes (stock et chiffre d\'affaires)')+'</label><input type="checkbox" style="width:auto;" '+(facLie?'checked':'')+' onchange="facLie=this.checked"></div>' +
       '<button class="btn block" onclick="saveFacture()">Enregistrer la facture</button>' +
     '</div>' +
     '<h3 class="sub-title">Factures '+(isSoin?'soins':'produits')+' enregistrées</h3>' + pastFactures;
@@ -1048,12 +1061,40 @@ function saveFacture(){
   var facture = { id:uid(), type:facturesSub, numero:numero, date:date, client:client, tel:tel, lignes:nouvelleFactureLignes, remise:remise, total:sousTotal-remise };
   DB.factures.push(facture);
   saveKey(KEYS.factures, DB.factures);
+  if(facLie) facturerVersVentes(facture, sousTotal);
   nouvelleFactureLignes = [];
   nouvelleFactureMeta = { numero:null, date:null, client:'', tel:'', remise:0 };
   showToast('Facture enregistrée ('+numero+')');
   renderers.factures();
 }
+function facturerVersVentes(f, sousTotal){
+  var ratio = sousTotal > 0 ? (sousTotal - (f.remise||0)) / sousTotal : 1;
+  if(f.type==='soin'){
+    f.lignes.forEach(function(l){
+      var soin = DB.soins.find(function(x){return x.id===l.refId;});
+      for(var k=0;k<l.qte;k++){
+        DB.journal.push({ id:uid(), date:f.date, cliente:f.client, soinId:l.refId, soinNom:l.designation, prix:Math.round(l.prix*ratio), employe:'', facture:f.numero });
+      }
+    });
+    saveKey(KEYS.journal, DB.journal);
+  } else {
+    f.lignes.forEach(function(l){
+      var pr = DB.produits.find(function(x){return x.id===l.refId;}); if(!pr) return;
+      var c = produitCalc(pr), total = Math.round(l.total*ratio), numero = consumeNumero('vente');
+      DB.ventes.push({ id:uid(), numero:numero, date:f.date, produitId:pr.id, produitNom:pr.nom, prixVente:total/l.qte, coutUnitaire:c.achatTotal,
+        margeUnitaire:total/l.qte - c.achatTotal, qte:l.qte, total:total, marge:total - l.qte*c.achatTotal, client:f.client, facture:f.numero });
+    });
+    saveKey(KEYS.ventes, DB.ventes);
+  }
+}
 function deleteFacture(id){ if(!isAdmin()){ showToast('Réservé aux administrateurs'); return; }
+  var fac = DB.factures.find(function(f){return f.id===id;});
+  if(fac){
+    var avant = DB.ventes.length + DB.journal.length;
+    DB.ventes = DB.ventes.filter(function(v){return v.facture!==fac.numero;});
+    DB.journal = DB.journal.filter(function(j){return j.facture!==fac.numero;});
+    if(DB.ventes.length + DB.journal.length !== avant){ saveKey(KEYS.ventes, DB.ventes); saveKey(KEYS.journal, DB.journal); }
+  }
   DB.factures = DB.factures.filter(function(f){return f.id!==id;});
   saveKey(KEYS.factures, DB.factures);
   renderers.factures();
@@ -2000,7 +2041,7 @@ function commandesHtml(){
 /* ================= ACCUEIL ================= */
 function allerA(tab, sub){
   if(!isAdmin()) return;
-  if(tab==='produits'){ produitsSub = sub||'catalogue'; }
+  if(tab==='produits'){ produitsSub = sub||'catalogue'; if(sub==='ventes') tab='ventes'; }
   if(tab==='finances'){ financesSub = sub||'depenses'; }
   switchTab(tab);
 }
