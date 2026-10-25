@@ -437,11 +437,21 @@ async function loadAll(){
   DB.utilisateurs = await loadKey(KEYS.utilisateurs, null);
   if(!DB.utilisateurs || !DB.utilisateurs.length){
     DB.utilisateurs = [
-      { id:'u_admin', nom:'Coumba & Ali', role:'admin', hash:hashCode('1234') },
+      { id:'u_admin', nom:'Ali', role:'admin', hash:hashCode('1234') },
+      { id:'u_coumba', nom:'Coumba', role:'admin', hash:hashCode('4321') },
       { id:'u_caisse', nom:'Caissière', role:'caissiere', hash:hashCode('0000') }
     ];
     saveKey(KEYS.utilisateurs, DB.utilisateurs);
   }
+  (function(){ // migration : « Coumba & Ali » devient deux comptes
+    var a = DB.utilisateurs.find(function(u){return u.id==='u_admin' && u.nom==='Coumba & Ali';});
+    if(a){
+      a.nom = 'Ali';
+      if(!DB.utilisateurs.some(function(u){return u.id==='u_coumba';}) && !DB.utilisateurs.some(function(u){return u.hash===hashCode('4321');}))
+        DB.utilisateurs.splice(1,0,{ id:'u_coumba', nom:'Coumba', role:'admin', hash:hashCode('4321') });
+      saveKey(KEYS.utilisateurs, DB.utilisateurs);
+    }
+  })();
   DB.clients = await loadKey(KEYS.clients, []);
   DB.compteurs = await loadKey(KEYS.compteurs, null);
   if(!DB.compteurs){
@@ -2010,7 +2020,7 @@ renderers.accueil = function(){
   var topArr = Object.keys(top).sort(function(a,b){return top[b]-top[a];}).slice(0,3);
   var maxQ = topArr.length ? top[topArr[0]] : 1;
   var d = new Date(); var salut = d.getHours()<12 ? 'Bonjour' : (d.getHours()<18 ? 'Bon après-midi' : 'Bonsoir');
-  el.innerHTML = '<h2 class="section-title">'+salut+'</h2>' +
+  el.innerHTML = '<h2 class="section-title">'+salut+(SESSION?' '+escHtml(SESSION.nom):'')+'</h2>' +
     '<div class="metric-grid">' +
       '<div class="metric"><div class="lbl">Ventes aujourd\'hui</div><div class="val">'+fmt(caJour)+'</div></div>' +
       '<div class="metric"><div class="lbl">Ventes du mois</div><div class="val">'+fmt(caMois)+'</div></div>' +
@@ -2135,7 +2145,7 @@ document.addEventListener('keydown', function(e){
 });
 
 /* ---- gestion des accès (admin) ---- */
-var CODES_DEFAUT = [hashCode('1234'), hashCode('0000')];
+var CODES_DEFAUT = [hashCode('1234'), hashCode('4321'), hashCode('0000')];
 function accesHtml(){
   var defaut = DB.utilisateurs.some(function(u){return CODES_DEFAUT.indexOf(u.hash)>=0;});
   var nbAdmins = DB.utilisateurs.filter(function(u){return u.role==='admin';}).length;
@@ -2147,7 +2157,7 @@ function accesHtml(){
       '<button class="btn small" onclick="changerCode(\''+u.id+'\')">Changer</button>' +
       ((u.role==='admin' && nbAdmins<=1) || estMoi ? '' : '<button class="btn secondary small" style="color:var(--danger);" onclick="supprimerUtilisateur(\''+u.id+'\')">Retirer</button>') + '</div></div>';
   }).join('');
-  return (defaut ? '<div class="banner-note" style="background:#fbe0de;color:#8a241c;">&#9888; Les codes standards (1234 / 0000) sont encore actifs. Change-les ici dès que possible.</div>' : '') +
+  return (defaut ? '<div class="banner-note" style="background:#fbe0de;color:#8a241c;">&#9888; Les codes standards (1234 / 4321 / 0000) sont encore actifs. Change-les ici dès que possible.</div>' : '') +
     '<div class="meta" style="margin-bottom:8px;">Administrateur : accès complet. Caissière : ventes de produits, soins réalisés et factures seulement, sans prix d\'achat, marges ni suppression.</div>' + liste +
     '<h3 class="sub-title">Ajouter une personne</h3><div class="card">' +
       '<label>Nom</label><input type="text" id="nuNom" placeholder="Ex : Fatou">' +
