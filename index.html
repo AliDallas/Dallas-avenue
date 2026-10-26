@@ -358,14 +358,38 @@ async function cloudPull(){
   var json = await res.json();
   return json.record || json;
 }
+/* Hors ligne : chaque modification est marquée « en attente » et envoyée
+   dès que la connexion revient (ou au prochain essai automatique). */
+function marquerEnAttente(v){
+  try{ localStorage.setItem('sync_pending', v ? '1' : '0'); }catch(e){}
+}
+function syncEnAttente(){
+  try{ return localStorage.getItem('sync_pending') === '1'; }catch(e){ return false; }
+}
 function scheduleCloudPush(){
   var cfg = getSyncConfig();
   if(!cfg.enabled || !cfg.apiKey || !cfg.binId) return;
+  marquerEnAttente(true);
   clearTimeout(syncPushTimer);
-  syncPushTimer = setTimeout(function(){
-    cloudPush().catch(function(){});
-  }, 1500);
+  syncPushTimer = setTimeout(envoyerEnAttente, 1500);
 }
+function envoyerEnAttente(){
+  if(!syncEnAttente()) return;
+  if(!navigator.onLine){ return; }
+  cloudPush().then(function(){
+    marquerEnAttente(false);
+  }).catch(function(){
+    clearTimeout(syncPushTimer);
+    syncPushTimer = setTimeout(envoyerEnAttente, 30000);
+  });
+}
+window.addEventListener('online', function(){
+  showToast('Connexion retrouvée : synchronisation...');
+  envoyerEnAttente();
+});
+window.addEventListener('offline', function(){
+  showToast('Hors ligne : vos modifications seront envoyées au retour de la connexion');
+});
 async function setupSync(){
   var apiKey = document.getElementById('syncApiKey').value.trim();
   var binId = document.getElementById('syncBinId').value.trim();
@@ -398,6 +422,7 @@ async function syncMaintenant(){
   if(!cfg.apiKey || !cfg.binId){ showToast('Configure d\'abord la synchronisation'); return; }
   showToast('Synchronisation...');
   try{
+    if(syncEnAttente()){ await cloudPush(); marquerEnAttente(false); showToast('Synchronisé avec succès'); return; }
     var remote = await cloudPull();
     if(remote && remote.updated_at && remote.updated_at !== lastKnownRemoteUpdatedAt){
       applyFullPayload(remote);
@@ -415,6 +440,7 @@ function startSyncPolling(){
   var cfg = getSyncConfig();
   if(!cfg.enabled || !cfg.apiKey || !cfg.binId) return;
   syncPollTimer = setInterval(function(){
+    if(syncEnAttente()){ envoyerEnAttente(); return; } // ne jamais écraser des modifications locales non envoyées
     cloudPull().then(function(remote){
       if(remote && remote.updated_at && remote.updated_at !== lastKnownRemoteUpdatedAt){
         applyFullPayload(remote);
