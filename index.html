@@ -154,6 +154,7 @@
   .lockscr h1{margin:4px 0 2px;color:var(--gold);font-size:22px;letter-spacing:.08em;}
   .lockscr .sub{font-size:13px;opacity:.75;margin-bottom:14px;}
   .lockscr .dots{height:30px;font-size:26px;letter-spacing:8px;color:var(--gold);}
+  .lockscr .lockinput{width:240px;max-width:80vw;text-align:center;font-size:28px;letter-spacing:10px;background:#17140c;border:1px solid #3a3320;color:#f3e7c4;border-radius:14px;padding:12px;margin:6px 0 10px;font-family:inherit;}
   .lockscr .msg{height:20px;font-size:13px;color:#ff8a80;margin-bottom:6px;}
   .lockscr .pad{display:grid;grid-template-columns:repeat(3,76px);gap:10px;}
   .lockscr .pad button{height:60px;border-radius:50%;border:1px solid #3a3320;background:#17140c;color:#f3e7c4;font-size:22px;font-family:inherit;cursor:pointer;}
@@ -219,6 +220,9 @@ var produitsPeriode = '';
 var resumePeriode = '';
 var prodQ = '', prodFiltre = 'tous', prodTri = 'nom';
 var facLie = true;
+var caisseLignes = [];
+var caisseMeta = { client:'', tel:'', remise:0 };
+var derniereFactureId = null;
 var achatLignes = [], achatFourn = '', achatDepense = true;
 var cmdTexte = '', cmdAnalyse = null;
 
@@ -797,25 +801,27 @@ renderers.produits = function(){
     var prodOptions = DB.produits.map(function(p){
       return '<option value="'+p.id+'">'+escHtml(p.nom)+' ('+fmt(p.prixVente)+')</option>';
     }).join('');
+    var facVues = {};
     var ventesList = DB.ventes.slice().reverse().slice(0,40).map(function(v){
+      var facNum = v.facture, fac = facNum ? DB.factures.find(function(f){return f.numero===facNum;}) : null;
+      var premiere = facNum ? !facVues[facNum] : true;
+      if(facNum) facVues[facNum] = 1;
+      var actions = '';
+      if(fac && premiere){
+        actions = '<button class="icon-btn" title="Imprimer la facture" onclick="imprimerFacture(\''+fac.id+'\',\'normal\')">&#128424;</button>' +
+                  '<button class="icon-btn" title="Envoyer sur WhatsApp" onclick="partagerFacture(\''+fac.id+'\')">&#128172;</button>';
+      } else if(!facNum){
+        actions = '<button class="icon-btn" title="Envoyer sur WhatsApp" onclick="partagerVente(\''+v.id+'\')">&#128172;</button>';
+      }
       return '<div class="item"><div>' +
         '<div class="name">'+(v.numero?'<span class="meta">'+escHtml(v.numero)+'</span> ':'')+escHtml(v.produitNom)+' &times;'+v.qte+'</div>' +
         '<div class="meta">'+v.date+(v.client?' &middot; '+escHtml(v.client):'')+(v.facture?' &middot; facture '+escHtml(v.facture):'')+(v.commande?' &middot; boutique':'')+'</div>' +
         '</div><div class="row" style="gap:6px;">' +
-        '<span class="price">'+fmt(v.total)+'</span>' +
+        '<span class="price">'+fmt(v.total)+'</span>' + actions +
         '<button class="icon-btn danger" onclick="deleteVente(\''+v.id+'\')">&#128465;</button>' +
         '</div></div>';
     }).join('') || '<div class="empty">Aucune vente enregistrée.</div>';
-    body =
-      (DB.produits.length ? '' : '<div class="banner-note">Ajoute d\'abord un produit dans l\'onglet Catalogue.</div>') +
-      '<div class="card">' +
-        '<label>Date</label><input type="date" id="venteDate" value="'+todayISO()+'">' +
-        '<label>Produit</label><select id="venteProduit"><option value="">Choisir un produit...</option>'+prodOptions+'</select>' +
-        '<label>Quantité</label><input type="number" id="venteQte" placeholder="1" min="1">' +
-        '<label>Client(e) (optionnel)</label><input type="text" id="venteClient" list="clientsDatalist" placeholder="Nom">' +
-        '<button class="btn block" onclick="addVente()">Enregistrer la vente</button>' +
-      '</div>' + clientsDatalistHtml() +
-      '<h3 class="sub-title">Journal des ventes</h3>' + ventesList;
+    body = caisseHtml() + '<h3 class="sub-title">Journal des ventes</h3>' + ventesList;
   } else {
     var ventesF = produitsPeriode ? DB.ventes.filter(function(v){return inPeriode(v.date, produitsPeriode);}) : DB.ventes;
     var caProduits = ventesF.reduce(function(a,v){return a+v.total;},0);
@@ -940,6 +946,114 @@ function deleteProduit(id){ if(!isAdmin()){ showToast('Réservé aux administrat
   saveKey(KEYS.produits, DB.produits);
   renderers.produits();
 }
+/* ================= CAISSE (vente multi-produits + facture) ================= */
+function caisseHtml(){
+  var opts = DB.produits.map(function(p){
+    return '<option value="'+p.id+'">'+escHtml(p.nom)+' ('+fmt(p.prixVente)+') · stock '+stockRestant(p)+'</option>';
+  }).join('');
+  var sous = caisseLignes.reduce(function(a,l){ return a+l.prix*l.qte; },0);
+  var total = Math.max(0, sous - (caisseMeta.remise||0));
+  var lignes = caisseLignes.map(function(l,i){
+    return '<div class="item"><div><div class="name">'+escHtml(l.nom)+'</div><div class="meta">'+l.qte+' × '+fmt(l.prix)+'</div></div>' +
+      '<div class="row" style="gap:6px;"><span class="price">'+fmt(l.prix*l.qte)+'</span>' +
+      '<button class="icon-btn danger" onclick="removeLigneCaisse('+i+')">&#128465;</button></div></div>';
+  }).join('') || '<div class="empty">Panier vide. Ajoute des produits ci-dessus.</div>';
+  var derniere = derniereFactureId ? DB.factures.find(function(f){return f.id===derniereFactureId;}) : null;
+  var carteDerniere = derniere ? '<div class="card" style="border:1px solid var(--accent,#c9a227);">' +
+      '<div class="row"><b>Vente enregistrée</b><span class="meta">'+escHtml(derniere.numero)+'</span></div>' +
+      '<div class="meta" style="margin:4px 0 10px;">'+escHtml(derniere.client||'Client non renseigné')+' · '+fmt(derniere.total)+'</div>' +
+      '<button class="btn block" onclick="imprimerFacture(\''+derniere.id+'\',\'normal\')">&#128424; Imprimer la facture</button>' +
+      '<button class="btn secondary block" style="margin-top:8px;" onclick="imprimerFacture(\''+derniere.id+'\',\'ticket\')">&#128424; Imprimer le ticket</button>' +
+      '<button class="btn wa block" style="margin-top:8px;" onclick="partagerFacture(\''+derniere.id+'\')">&#128172; Envoyer sur WhatsApp</button>' +
+      '<button class="btn secondary block" style="margin-top:8px;" onclick="derniereFactureId=null;renderers.produits();">Fermer</button>' +
+    '</div>' : '';
+  return (DB.produits.length ? '' : '<div class="banner-note">Ajoute d\'abord un produit dans l\'onglet Catalogue.</div>') + carteDerniere +
+    '<div class="card">' +
+      '<label>Produit</label><select id="caisseProduit"><option value="">Choisir un produit...</option>'+opts+'</select>' +
+      '<label>Quantité</label><input type="number" id="caisseQte" value="1" min="1">' +
+      '<button class="btn secondary block" onclick="addLigneCaisse()">+ Ajouter au panier</button>' +
+    '</div>' +
+    '<h3 class="sub-title">Panier</h3>' + lignes +
+    '<div class="card">' +
+      '<label>Client(e) (optionnel)</label><input type="text" id="caisseClient" list="clientsDatalist" placeholder="Nom" value="'+escHtml(caisseMeta.client)+'" oninput="onCaisseClient(this.value)">' +
+      '<label>Téléphone (optionnel)</label><input type="tel" id="caisseTel" value="'+escHtml(caisseMeta.tel)+'" oninput="caisseMeta.tel=this.value">' +
+      '<label>Remise (F)</label><input type="number" id="caisseRemise" value="'+(caisseMeta.remise||0)+'" onchange="caisseMeta.remise=parseFloat(this.value)||0;renderers.produits();">' +
+      '<div class="row" style="margin:12px 0;"><span>Total à payer</span><b style="font-size:18px;">'+fmt(total)+'</b></div>' +
+      '<button class="btn block" onclick="validerCaisse(\'normal\')">Valider et imprimer la facture</button>' +
+      '<button class="btn secondary block" style="margin-top:8px;" onclick="validerCaisse(\'ticket\')">Valider et imprimer le ticket</button>' +
+      '<button class="btn secondary block" style="margin-top:8px;" onclick="validerCaisse(null)">Valider sans imprimer</button>' +
+    '</div>' + clientsDatalistHtml();
+}
+function onCaisseClient(val){
+  caisseMeta.client = val;
+  var tel = lookupClientPhone(val);
+  if(tel){ caisseMeta.tel = tel; var t = document.getElementById('caisseTel'); if(t) t.value = tel; }
+}
+function addLigneCaisse(){
+  var id = document.getElementById('caisseProduit').value;
+  var qte = parseFloat(document.getElementById('caisseQte').value);
+  if(!id){ showToast('Choisis un produit'); return; }
+  if(!qte || qte<=0){ showToast('Quantité invalide'); return; }
+  var p = DB.produits.find(function(x){return x.id===id;}); if(!p) return;
+  var dejaDansPanier = caisseLignes.filter(function(l){return l.id===id;}).reduce(function(a,l){return a+l.qte;},0);
+  if(dejaDansPanier + qte > stockRestant(p)){ showToast('Stock insuffisant : il reste '+stockRestant(p)+' '+p.nom); return; }
+  var ligne = caisseLignes.find(function(l){return l.id===id;});
+  if(ligne) ligne.qte += qte; else caisseLignes.push({ id:p.id, nom:p.nom, prix:p.prixVente, qte:qte });
+  renderers.produits();
+}
+function removeLigneCaisse(i){ caisseLignes.splice(i,1); renderers.produits(); }
+function validerCaisse(format){
+  if(!caisseLignes.length){ showToast('Le panier est vide'); return; }
+  for(var i=0;i<caisseLignes.length;i++){
+    var l = caisseLignes[i], p = DB.produits.find(function(x){return x.id===l.id;});
+    if(!p || l.qte > stockRestant(p)){ showToast('Stock insuffisant pour '+l.nom); return; }
+  }
+  var sous = caisseLignes.reduce(function(a,l){ return a+l.prix*l.qte; },0);
+  var remise = Math.min(caisseMeta.remise||0, sous);
+  var numero = consumeNumero('factureProduit');
+  var facture = {
+    id:uid(), type:'produit', numero:numero, date:todayISO(),
+    client:(caisseMeta.client||'').trim(), tel:(caisseMeta.tel||'').trim(),
+    lignes:caisseLignes.map(function(l){ return { designation:l.nom, prix:l.prix, qte:l.qte, total:l.prix*l.qte, refId:l.id }; }),
+    remise:remise, total:sous-remise
+  };
+  DB.factures.push(facture);
+  saveKey(KEYS.factures, DB.factures);
+  facturerVersVentes(facture, sous);   // enregistre les ventes et déduit le stock
+  caisseLignes = [];
+  caisseMeta = { client:'', tel:'', remise:0 };
+  derniereFactureId = facture.id;
+  showToast('Vente enregistrée ('+numero+')');
+  renderers.produits();
+  if(format) imprimerFacture(facture.id, format);
+}
+
+/* ---- partage WhatsApp des factures et ventes ---- */
+function waTelUrl(tel, msg){
+  var d = String(tel||'').replace(/\D/g,'');
+  if(d.length===8) d = '223' + d;
+  return 'https://wa.me/' + d + '?text=' + encodeURIComponent(msg);
+}
+function ouvrirWhatsApp(url){
+  var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function texteFacture(f){
+  var m = '*Facture Dallas Avenue*\n';
+  m += 'N° ' + f.numero + ' · ' + f.date + '\n\n';
+  f.lignes.forEach(function(l){ m += '- ' + l.designation + ' x' + l.qte + ' = ' + fmt(l.total) + '\n'; });
+  if(f.remise) m += 'Remise : -' + fmt(f.remise) + '\n';
+  m += '\n*TOTAL : ' + fmt(f.total) + '*\n\nMerci de votre confiance !';
+  return m;
+}
+function partagerVente(id){
+  var v = DB.ventes.find(function(x){return x.id===id;});
+  if(!v){ showToast('Vente introuvable'); return; }
+  var m = '*Dallas Avenue*\n' + (v.numero||'') + ' · ' + v.date + '\n\n' +
+    '- ' + v.produitNom + ' x' + v.qte + ' = ' + fmt(v.total) + '\n\n*TOTAL : ' + fmt(v.total) + '*\n\nMerci de votre confiance !';
+  ouvrirWhatsApp(waTelUrl('', m));
+}
+
 function addVente(){
   var produitId = document.getElementById('venteProduit').value;
   var date = document.getElementById('venteDate').value || todayISO();
@@ -2183,11 +2297,20 @@ function showLock(msg){
   var b = document.getElementById('lockBtn'); if(b) b.style.display = 'none';
   el.innerHTML = '<img src="'+document.querySelector('header.topbar img').src+'" alt="">' +
     '<h1>DALLAS AVENUE</h1><div class="sub">Entre ton code d\'accès</div>' +
-    '<div class="dots" id="lockDots"></div><div class="msg" id="lockMsg">'+(msg||'')+'</div>' +
+    '<input id="lockInput" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="8" placeholder="Code" class="lockinput">' +
+    '<div class="msg" id="lockMsg">'+(msg||'')+'</div>' +
     '<div class="pad">' + [1,2,3,4,5,6,7,8,9].map(function(n){return '<button onclick="lockKey(\''+n+'\')">'+n+'</button>';}).join('') +
     '<button onclick="lockKey(\'del\')">&#9003;</button><button onclick="lockKey(\'0\')">0</button><button class="ok" onclick="lockKey(\'ok\')">OK</button></div>';
 }
-function lockDraw(){ var d = document.getElementById('lockDots'); if(d) d.textContent = new Array(lockBuf.length+1).join('●'); }
+function lockDraw(){
+  var li = document.getElementById('lockInput'); if(li && li.value !== lockBuf) li.value = lockBuf;
+  var d = document.getElementById('lockDots'); if(d) d.textContent = new Array(lockBuf.length+1).join('●');
+}
+function lockFromInput(){
+  var li = document.getElementById('lockInput'); if(!li) return;
+  lockBuf = li.value.replace(/\D/g,'').slice(0,8);
+  var msg = document.getElementById('lockMsg'); if(msg) msg.textContent = '';
+}
 function lockKey(k){
   var msg = document.getElementById('lockMsg');
   if(Date.now() < lockUntil){ msg.textContent = 'Trop d\'essais. Patiente quelques secondes.'; return; }
@@ -2227,7 +2350,14 @@ document.addEventListener('visibilitychange', function(){
   if(document.hidden){ hiddenAt = Date.now(); }
   else if(SESSION && hiddenAt && Date.now()-hiddenAt > 2*60*1000){ showLock('Verrouillé'); }
 });
+document.addEventListener('input', function(e){
+  if(e.target && e.target.id==='lockInput') lockFromInput();
+});
 document.addEventListener('keydown', function(e){
+  if(e.target && e.target.id==='lockInput'){
+    if(e.key==='Enter'){ e.preventDefault(); lockFromInput(); lockSubmit(); }
+    return;
+  }
   if(!SESSION && document.getElementById('lock').style.display!=='none'){
     if(/^[0-9]$/.test(e.key)) lockKey(e.key); else if(e.key==='Backspace') lockKey('del'); else if(e.key==='Enter') lockKey('ok');
   }
