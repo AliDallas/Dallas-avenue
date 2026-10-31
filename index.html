@@ -122,6 +122,10 @@
   nav.bottomnav button .ic{display:block;font-size:17px;margin-bottom:2px;}
   @media(max-width:480px){nav.bottomnav button{font-size:9.5px;} nav.bottomnav button .ic{font-size:15px;}}
   nav.bottomnav button.active{color:var(--gold);}
+  .plusmenu{position:fixed;bottom:64px;right:12px;display:flex;flex-direction:column;min-width:180px;background:var(--card,#fff);color:var(--text,#222);border:1px solid #ccc;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:60;overflow:hidden;}
+  .plusmenu[hidden]{display:none;}
+  .plusmenu button{padding:14px 16px;background:none;border:0;border-bottom:1px solid #ddd;text-align:left;font-size:15px;color:inherit;}
+  .plusmenu button:last-child{border-bottom:0;}
   .subtabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none;}
   .subtabs button{flex:1 0 auto;padding:9px 10px;white-space:nowrap;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit;}
   .subtabs button.active{background:var(--black);color:var(--gold);border-color:var(--black);}
@@ -170,6 +174,7 @@
   body.role-caisse nav.bottomnav button[data-tab="accueil"],
   body.role-caisse nav.bottomnav button[data-tab="finances"],
   body.role-caisse nav.bottomnav button[data-tab="sauvegarde"],
+  body.role-caisse nav.bottomnav button[data-tab="plus"],
   body.role-caisse nav.bottomnav button[data-tab="clients"]{display:none;}
   body.role-caisse #view-soins .subtabs, body.role-caisse #view-produits .subtabs{display:none;}
   body.role-caisse .icon-btn.danger, body.role-caisse .btn.danger{display:none;}
@@ -218,10 +223,13 @@
   <button data-tab="produits"><span class="ic">&#128230;</span>Produits</button>
   <button data-tab="ventes"><span class="ic">&#128722;</span>Ventes</button>
   <button data-tab="factures"><span class="ic">&#128196;</span>Factures</button>
-  <button data-tab="sauvegarde"><span class="ic">&#128190;</span>Sauvegarde</button>
   <button data-tab="finances"><span class="ic">&#128176;</span>Finances</button>
-  <button data-tab="clients"><span class="ic">&#128100;</span>Clients</button>
+  <button data-tab="plus"><span class="ic">&#9776;</span>Plus</button>
 </nav>
+<div id="plusMenu" class="plusmenu" hidden>
+  <button onclick="switchTab('clients');togglePlus()">&#128100; Clients</button>
+  <button onclick="switchTab('sauvegarde');togglePlus()">&#128190; Sauvegarde</button>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -565,7 +573,9 @@ function updateNav(){
     b.classList.toggle('active', on);
   });
 }
+function togglePlus(){ var m=document.getElementById('plusMenu'); if(m) m.hidden = !m.hidden; }
 function switchTab(tab){
+  if(tab==='plus'){ togglePlus(); return; }
   if(!SESSION){ return; }
   if(tab==='ventes'){ tab = 'produits'; produitsSub = 'ventes'; }
   else if(tab==='produits' && produitsSub==='ventes' && isAdmin()){ produitsSub = 'catalogue'; }
