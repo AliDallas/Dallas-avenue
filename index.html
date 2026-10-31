@@ -802,7 +802,7 @@ renderers.produits = function(){
           ? '<img src="'+DB.produits.find(function(x){return x.id===editingProduitId;}).photo+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">'
           : '');
 
-    body = barre + list +
+    var formHtml =
       '<details id="prodFormDet" style="margin-top:14px;"><summary class="btn secondary block" style="text-align:center;list-style:none;">+ Ajouter / modifier un produit</summary>' +
       '<div style="height:10px"></div>' +
       '<div class="card" id="prodFormCard">' +
@@ -825,6 +825,7 @@ renderers.produits = function(){
         '<label>Étiquette (boutique)</label><select id="prodBadge"><option value="">Aucune</option><option>Nouveau</option><option>Promo</option><option>Coup de coeur</option></select>' +
         '<button class="btn block" id="prodFormBtn" onclick="saveProduit()">Ajouter au catalogue</button>' +
       '</div></details>';
+    body = barre + formHtml + list;
   } else if(produitsSub === 'boutique'){
     body = boutiqueHtml();
   } else if(produitsSub === 'achats'){
