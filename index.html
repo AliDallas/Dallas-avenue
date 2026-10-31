@@ -1048,7 +1048,7 @@ function caisseHtml(){
     '<h3 class="sub-title">Panier</h3>' + lignes +
     '<div class="card">' +
       '<label>Client(e) (optionnel)</label><input type="text" id="caisseClient" list="clientsDatalist" placeholder="Nom" value="'+escHtml(caisseMeta.client)+'" oninput="onCaisseClient(this.value)">' +
-      '<label>Téléphone (optionnel)</label><input type="tel" id="caisseTel" value="'+escHtml(caisseMeta.tel)+'" oninput="caisseMeta.tel=this.value">' +
+      '<label>Téléphone (optionnel)</label><input type="text" inputmode="none" data-pad="1" id="caisseTel" value="'+escHtml(caisseMeta.tel)+'" oninput="caisseMeta.tel=this.value">' +
       '<label>Remise (F)</label><input type="text" inputmode="none" data-pad="1" id="caisseRemise" value="'+(caisseMeta.remise||0)+'" onchange="caisseMeta.remise=parseFloat(this.value)||0;renderers.produits();">' +
       '<div class="row" style="margin:12px 0;"><span>Total à payer</span><b style="font-size:18px;">'+fmt(total)+'</b></div>' +
       '<button class="btn block" onclick="validerCaisse(\'normal\')">Valider et imprimer la facture</button>' +
@@ -1220,7 +1220,7 @@ renderers.factures = function(){
       '<label>N° facture (automatique)</label><input type="text" id="facNum" value="'+escHtml(nextNum)+'" readonly style="background:var(--bg);color:var(--muted);">' +
       '<label>Date</label><input type="date" id="facDate" value="'+curDate+'" oninput="nouvelleFactureMeta.date=this.value">' +
       '<label>Client(e)</label><input type="text" id="facClient" list="clientsDatalist" placeholder="Nom" value="'+escHtml(nouvelleFactureMeta.client)+'" oninput="onFacClientInput(this.value)">' +
-      '<label>Téléphone</label><input type="text" id="facTel" placeholder="71 74 74 15" value="'+escHtml(nouvelleFactureMeta.tel)+'" oninput="nouvelleFactureMeta.tel=this.value">' +
+      '<label>Téléphone</label><input type="text" inputmode="none" data-pad="1" id="facTel" placeholder="71 74 74 15" value="'+escHtml(nouvelleFactureMeta.tel)+'" oninput="nouvelleFactureMeta.tel=this.value">' +
       clientsDatalistHtml() +
     '</div>' +
     '<div class="card">' +
@@ -2016,7 +2016,7 @@ renderers.clients = function(){
     '<div class="banner-note">Ce répertoire est proposé automatiquement (nom + téléphone) quand tu remplis une facture, une visite ou une vente.</div>' +
     '<div class="card" id="clientFormCard">' +
       '<label>Nom</label><input type="text" id="clientNom" placeholder="Nom du client(e)">' +
-      '<label>Téléphone</label><input type="text" id="clientTel" placeholder="71 74 74 15">' +
+      '<label>Téléphone</label><input type="text" inputmode="none" data-pad="1" id="clientTel" placeholder="71 74 74 15">' +
       '<label>Note (optionnel)</label><input type="text" id="clientNote" placeholder="Ex : cliente fidèle">' +
       '<button class="btn block" id="clientFormBtn" onclick="saveClient()">Ajouter au répertoire</button>' +
     '</div>' +
@@ -2123,7 +2123,7 @@ function achatsHtml(){
   return '<div class="metric-grid"><div class="metric" style="grid-column:1/3;"><div class="lbl">Commandes fournisseurs en attente</div><div class="val">'+fmt(enAttente)+'</div></div></div>' +
     recoHtml +
     '<div class="card"><div style="font-weight:600;margin-bottom:6px;">Nouveau fournisseur</div>' +
-      '<input type="text" id="fouNom" placeholder="Nom du fournisseur"><input type="tel" id="fouTel" placeholder="Téléphone (optionnel)" style="margin-top:6px;">' +
+      '<input type="text" id="fouNom" placeholder="Nom du fournisseur"><input type="text" inputmode="none" data-pad="1" id="fouTel" placeholder="Téléphone (optionnel)" style="margin-top:6px;">' +
       '<button class="btn secondary block" style="margin-top:8px;" onclick="addFournisseur()">Enregistrer le fournisseur</button>' +
       (DB.fournisseurs.length ? '<div class="meta" style="margin-top:8px;">'+DB.fournisseurs.map(function(f){return escHtml(f.nom)+(f.tel?' ('+escHtml(f.tel)+')':'')+' <a href="#" onclick="delFournisseur(\''+f.id+'\');return false;" style="color:var(--danger);">retirer</a>';}).join(' &middot; ')+'</div>' : '') +
     '</div>' +
