@@ -169,6 +169,7 @@
   body.role-caisse nav.bottomnav button[data-tab="produits"],
   body.role-caisse nav.bottomnav button[data-tab="accueil"],
   body.role-caisse nav.bottomnav button[data-tab="finances"],
+  body.role-caisse nav.bottomnav button[data-tab="sauvegarde"],
   body.role-caisse nav.bottomnav button[data-tab="clients"]{display:none;}
   body.role-caisse #view-soins .subtabs, body.role-caisse #view-produits .subtabs{display:none;}
   body.role-caisse .icon-btn.danger, body.role-caisse .btn.danger{display:none;}
@@ -206,6 +207,7 @@
   <div class="view" id="view-soins"></div>
   <div class="view" id="view-produits"></div>
   <div class="view" id="view-factures"></div>
+  <div class="view" id="view-sauvegarde"></div>
   <div class="view" id="view-finances"></div>
   <div class="view" id="view-clients"></div>
 </div>
@@ -216,6 +218,7 @@
   <button data-tab="produits"><span class="ic">&#128230;</span>Produits</button>
   <button data-tab="ventes"><span class="ic">&#128722;</span>Ventes</button>
   <button data-tab="factures"><span class="ic">&#128196;</span>Factures</button>
+  <button data-tab="sauvegarde"><span class="ic">&#128190;</span>Sauvegarde</button>
   <button data-tab="finances"><span class="ic">&#128176;</span>Finances</button>
   <button data-tab="clients"><span class="ic">&#128100;</span>Clients</button>
 </nav>
@@ -1662,6 +1665,36 @@ async function publierBoutique(){ if(!isAdmin()){ showToast('Réservé aux admin
 /* ================= FINANCES (dépenses, dettes, résumé) ================= */
 function setFinancesSub(t){ if(!isAdmin()) return; financesSub = t; renderers.finances(); }
 
+function sauvegardeHtml(){
+  var syncCfg = getSyncConfig();
+  return (
+      '<h3 class="sub-title">Sauvegarde des données</h3>' +
+      '<div class="card">' +
+        '<div class="meta" style="margin-bottom:8px;">Télécharge une copie de toutes tes données (catalogues, ventes, visites, factures, dépenses, dettes) — utile pour garder une sauvegarde ou transférer vers un autre téléphone.</div>' +
+        '<button class="btn secondary block" onclick="exportData()">Exporter une sauvegarde (.json)</button>' +
+        '<label style="margin-top:10px;">Restaurer depuis un fichier de sauvegarde</label>' +
+        '<input type="file" accept="application/json" onchange="importDataFile(this)">' +
+        '<div class="meta" style="margin-top:6px;">Attention : restaurer un fichier remplace toutes les données actuelles.</div>' +
+      '</div>' +
+      '<h3 class="sub-title">Synchronisation automatique (en ligne)</h3>' +
+      '<div class="card">' +
+        '<div class="meta" style="margin-bottom:8px;">Relie tablette et téléphone via un espace de stockage gratuit JSONBin.io. Crée un compte sur jsonbin.io, copie ta "Master Key", colle-la ici sur le 1er appareil (laisse "ID de synchro" vide, il se crée automatiquement), puis copie cet ID généré dans le 2ᵉ appareil.</div>' +
+        '<label>Clé API JSONBin (Master Key)</label><input type="text" id="syncApiKey" value="'+escHtml(syncCfg.apiKey)+'" placeholder="Colle ta clé ici">' +
+        '<label>ID de synchro (laisse vide sur le 1er appareil)</label><input type="text" id="syncBinId" value="'+escHtml(syncCfg.binId)+'" placeholder="Généré automatiquement">' +
+        '<div class="row" style="margin-top:8px;"><label style="margin:0;">Activer la synchronisation automatique</label><input type="checkbox" id="syncEnabled" style="width:auto;" '+(syncCfg.enabled?'checked':'')+'></div>' +
+        '<button class="btn block" onclick="setupSync()">Enregistrer la configuration</button>' +
+        '<button class="btn secondary block" onclick="syncMaintenant()">Synchroniser maintenant</button>' +
+        '<div class="meta" style="margin-top:6px;">La synchro se déclenche automatiquement après chaque saisie et toutes les 20 secondes environ. Le dernier appareil qui enregistre a la priorité.</div>' +
+      '</div>'
+  );
+}
+
+renderers.sauvegarde = function(){
+  var el = document.getElementById('view-sauvegarde');
+  if(!isAdmin()){ el.innerHTML = ''; return; }
+  el.innerHTML = '<h2 class="section-title">Sauvegarde</h2>' + sauvegardeHtml();
+};
+
 renderers.finances = function(){
   var el = document.getElementById('view-finances');
   var subbar = '<div class="subtabs">' +
@@ -1792,25 +1825,7 @@ renderers.finances = function(){
       '</div>' +
       (produitsBas.length ?
         '<div class="banner-note" style="background:#fbe0de;color:#8a241c;">&#9888; Stock bas : '+produitsBas.map(function(p){return escHtml(p.nom);}).join(', ')+'</div>'
-        : '') +
-      '<h3 class="sub-title">Sauvegarde des données</h3>' +
-      '<div class="card">' +
-        '<div class="meta" style="margin-bottom:8px;">Télécharge une copie de toutes tes données (catalogues, ventes, visites, factures, dépenses, dettes) — utile pour garder une sauvegarde ou transférer vers un autre téléphone.</div>' +
-        '<button class="btn secondary block" onclick="exportData()">Exporter une sauvegarde (.json)</button>' +
-        '<label style="margin-top:10px;">Restaurer depuis un fichier de sauvegarde</label>' +
-        '<input type="file" accept="application/json" onchange="importDataFile(this)">' +
-        '<div class="meta" style="margin-top:6px;">Attention : restaurer un fichier remplace toutes les données actuelles.</div>' +
-      '</div>' +
-      '<h3 class="sub-title">Synchronisation automatique (en ligne)</h3>' +
-      '<div class="card">' +
-        '<div class="meta" style="margin-bottom:8px;">Relie tablette et téléphone via un espace de stockage gratuit JSONBin.io. Crée un compte sur jsonbin.io, copie ta "Master Key", colle-la ici sur le 1er appareil (laisse "ID de synchro" vide, il se crée automatiquement), puis copie cet ID généré dans le 2ᵉ appareil.</div>' +
-        '<label>Clé API JSONBin (Master Key)</label><input type="text" id="syncApiKey" value="'+escHtml(syncCfg.apiKey)+'" placeholder="Colle ta clé ici">' +
-        '<label>ID de synchro (laisse vide sur le 1er appareil)</label><input type="text" id="syncBinId" value="'+escHtml(syncCfg.binId)+'" placeholder="Généré automatiquement">' +
-        '<div class="row" style="margin-top:8px;"><label style="margin:0;">Activer la synchronisation automatique</label><input type="checkbox" id="syncEnabled" style="width:auto;" '+(syncCfg.enabled?'checked':'')+'></div>' +
-        '<button class="btn block" onclick="setupSync()">Enregistrer la configuration</button>' +
-        '<button class="btn secondary block" onclick="syncMaintenant()">Synchroniser maintenant</button>' +
-        '<div class="meta" style="margin-top:6px;">La synchro se déclenche automatiquement après chaque saisie et toutes les 20 secondes environ. Le dernier appareil qui enregistre a la priorité.</div>' +
-      '</div>';
+        : '');
   }
 
   el.innerHTML = '<h2 class="section-title">Finances</h2>' + subbar + body;
