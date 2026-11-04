@@ -1290,7 +1290,9 @@ function posFacturesRecentes(kind){
     return '<div class="item"><div>' +
       '<div class="name"><span class="meta">'+escHtml(f.numero)+'</span> '+escHtml(f.client||'Client de passage')+'</div>' +
       '<div class="meta">'+f.date+' · '+escHtml(f.paiement||'Espèces')+'</div></div>' +
-      '<div class="row" style="gap:6px;"><span class="price">'+fmt(f.total)+'</span>' +
+      '<div class="row" style="gap:4px;"><span class="price">'+fmt(f.total)+'</span>' +
+      '<button class="icon-btn" title="Envoyer sur WhatsApp" onclick="partagerFacture(\''+f.id+'\')">&#128172;</button>' +
+      '<button class="icon-btn" title="Imprimer la facture" onclick="imprimerFacture(\''+f.id+'\',\'normal\')">&#128424;</button>' +
       '<button class="btn secondary small" onclick="posSupprimerFacture(\''+f.id+'\',\''+kind+'\')">Supprimer</button></div></div>';
   }).join('');
 }
