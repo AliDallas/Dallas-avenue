@@ -189,6 +189,38 @@
   #numpad .np-zero{grid-column:span 4;}
   #numpad .np-del{color:#ff8a80;}
   body.hasnumpad{padding-bottom:260px;}
+  .pos{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;}
+  .pos-gauche{min-width:0;}
+  .pos-rech{margin-bottom:8px;}
+  .pos-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px;}
+  .pos-chip{flex:none;border:1px solid var(--border);background:#fff;color:var(--text);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;}
+  .pos-chip.on{background:var(--black);color:var(--gold);border-color:var(--black);}
+  .pos-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;}
+  .pos-tile{min-width:0;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);}
+  .pos-tile:active{transform:scale(.97);}
+  .pos-tile:disabled{opacity:.45;cursor:not-allowed;}
+  .pos-img{width:100%;aspect-ratio:1/1;border-radius:8px;background:var(--gold-light);display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .pos-img img{width:100%;height:100%;object-fit:cover;}
+  .pos-init{font-size:22px;font-weight:800;color:#8a6d0e;}
+  .pos-nom{font-size:12px;font-weight:600;margin-top:6px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .pos-prix{font-size:12px;font-weight:700;margin-top:2px;white-space:nowrap;}
+  .pos-stk{font-size:10px;color:var(--muted);}
+  .pos-ticket{min-width:0;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;}
+  .pos-ligne{padding:8px 0;border-bottom:1px solid var(--border);}
+  .pos-ligne-nom{font-size:13px;font-weight:600;}
+  .pos-ligne-bas{display:flex;justify-content:space-between;align-items:center;margin-top:6px;}
+  .pos-qte{display:flex;align-items:center;gap:6px;}
+  .pos-qte button{width:30px;height:30px;border-radius:50%;border:1px solid var(--black);background:#fff;font-size:16px;cursor:pointer;}
+  .pos-qte span{min-width:26px;text-align:center;font-weight:700;}
+  .pos-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:4px;}
+  .pos-mode{padding:9px 6px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;}
+  .pos-mode.on{background:var(--gold);border-color:var(--gold);color:var(--black);}
+  .wrap:has(.pos){max-width:1180px;}
+  @media(min-width:900px){
+    .pos{grid-template-columns:minmax(0,1fr) 340px;}
+    .pos-grid{grid-template-columns:repeat(5,minmax(0,1fr));}
+    .pos-ticket{position:sticky;top:12px;}
+  }
 </style>
 </head>
 <body>
@@ -640,16 +672,7 @@ renderers.soins = function(){
     var soinOptions = DB.soins.map(function(s){
       return '<option value="'+s.id+'">'+escHtml(s.categorie+' - '+s.nom+' ('+fmt(s.prix)+')')+'</option>';
     }).join('');
-    body =
-      (DB.soins.length ? '' : '<div class="banner-note">Ajoute d\'abord des soins dans l\'onglet Catalogue.</div>') +
-      '<div class="card">' +
-        '<label>Date</label><input type="date" id="visiteDate" value="'+todayISO()+'">' +
-        '<label>Cliente</label><input type="text" id="visiteCliente" list="clientsDatalist" placeholder="Nom de la cliente">' +
-        '<label>Soin</label><select id="visiteSoin"><option value="">Choisir un soin...</option>'+soinOptions+'</select>' +
-        '<label>Employée (optionnel)</label><input type="text" id="visiteEmploye" placeholder="Nom">' +
-        '<button class="btn block" onclick="addVisite()">Enregistrer la visite</button>' +
-      '</div>' + clientsDatalistHtml() +
-      '<h3 class="sub-title">Journal des visites</h3>' + journalHtml;
+    body = posHtml('soin') + '<h3 class="sub-title">Journal des visites</h3>' + journalHtml;
   } else {
     var journalF = soinsPeriode ? DB.journal.filter(function(j){return inPeriode(j.date, soinsPeriode);}) : DB.journal;
     var caSoins = journalF.reduce(function(a,j){return a+j.prix;},0);
@@ -858,7 +881,7 @@ renderers.produits = function(){
         '<button class="icon-btn danger" onclick="deleteVente(\''+v.id+'\')">&#128465;</button>' +
         '</div></div>';
     }).join('') || '<div class="empty">Aucune vente enregistrée.</div>';
-    body = '<button class="btn secondary block" style="margin-bottom:12px;" onclick="setProduitsSub(\'etiquettes\')">&#127991; Imprimer des étiquettes pour les rayons</button>' + caisseHtml() + '<h3 class="sub-title">Journal des ventes</h3>' + ventesList;
+    body = '<button class="btn secondary block" style="margin-bottom:12px;" onclick="setProduitsSub(\'etiquettes\')">&#127991; Imprimer des étiquettes pour les rayons</button>' + posHtml('produit') + '<h3 class="sub-title">Journal des ventes</h3>' + ventesList;
   } else {
     var ventesF = produitsPeriode ? DB.ventes.filter(function(v){return inPeriode(v.date, produitsPeriode);}) : DB.ventes;
     var caProduits = ventesF.reduce(function(a,v){return a+v.total;},0);
@@ -1021,86 +1044,177 @@ document.addEventListener('pointerdown', function(e){
   if(npTarget && !(e.target.closest && e.target.closest('#numpad'))) npHide();
 }, true);
 
-/* ================= CAISSE (vente multi-produits + facture) ================= */
-function caisseHtml(){
-  var opts = DB.produits.map(function(p){
-    return '<option value="'+p.id+'">'+escHtml(p.nom)+' ('+fmt(p.prixVente)+') · stock '+stockRestant(p)+'</option>';
+/* ================= CAISSE (tuiles + ticket) : produits et soins ================= */
+var caisseSoinLignes = [];
+var caisseSoinMeta = { client:'', tel:'', remise:0, paiement:'Espèces' };
+var derniereFactureSoinId = null;
+var POS = { produit:{ cat:'Toutes', rech:'' }, soin:{ cat:'Toutes', rech:'' } };
+var MODES_PAIEMENT = ['Espèces','Orange Money','Moov Money','À crédit'];
+
+function posSource(kind){
+  if(kind==='soin') return { items:DB.soins, lignes:caisseSoinLignes, meta:caisseSoinMeta, st:POS.soin };
+  return { items:DB.produits, lignes:caisseLignes, meta:caisseMeta, st:POS.produit };
+}
+function posPrix(kind, it){ return kind==='soin' ? it.prix : it.prixVente; }
+function posCategorie(it){ return (it.categorie||'').trim() || 'Sans catégorie'; }
+function posRefresh(kind){ if(kind==='soin') renderers.soins(); else renderers.produits(); }
+
+function posTuile(kind, it){
+  var prix = posPrix(kind, it);
+  var rest = kind==='produit' ? stockRestant(it) : null;
+  var epuise = kind==='produit' && rest<=0;
+  var img = (kind==='produit' && it.photo)
+    ? '<img src="'+it.photo+'" alt="">'
+    : '<span class="pos-init">'+escHtml(String(it.nom||'?').charAt(0).toUpperCase())+'</span>';
+  return '<button class="pos-tile" '+(epuise?'disabled':'')+' onclick="posAdd(\''+kind+'\',\''+it.id+'\')">' +
+    '<div class="pos-img">'+img+'</div>' +
+    '<div class="pos-nom">'+escHtml(it.nom)+'</div>' +
+    '<div class="pos-prix">'+fmt(prix)+'</div>' +
+    (kind==='produit' ? '<div class="pos-stk">'+(epuise?'Rupture':rest+' en stock')+'</div>' : '') +
+  '</button>';
+}
+function posGrilleHtml(kind){
+  var src = posSource(kind), q = src.st.rech.trim().toLowerCase();
+  var liste = src.items.filter(function(it){
+    return (src.st.cat==='Toutes' || posCategorie(it)===src.st.cat) &&
+           (!q || String(it.nom||'').toLowerCase().indexOf(q)>=0);
+  });
+  return liste.map(function(it){ return posTuile(kind, it); }).join('') ||
+    '<div class="empty" style="grid-column:1/-1;">Aucun article trouvé.</div>';
+}
+function posChipsHtml(kind){
+  var src = posSource(kind), cats = ['Toutes'];
+  src.items.forEach(function(it){ var c = posCategorie(it); if(cats.indexOf(c)<0) cats.push(c); });
+  return cats.map(function(c){
+    return '<button class="pos-chip'+(c===src.st.cat?' on':'')+'" data-c="'+escHtml(c)+'" onclick="posCat(\''+kind+'\',this.dataset.c)">'+escHtml(c)+'</button>';
   }).join('');
-  var sous = caisseLignes.reduce(function(a,l){ return a+l.prix*l.qte; },0);
-  var total = Math.max(0, sous - (caisseMeta.remise||0));
-  var lignes = caisseLignes.map(function(l,i){
-    return '<div class="item"><div><div class="name">'+escHtml(l.nom)+'</div><div class="meta">'+l.qte+' × '+fmt(l.prix)+'</div></div>' +
-      '<div class="row" style="gap:6px;"><span class="price">'+fmt(l.prix*l.qte)+'</span>' +
-      '<button class="icon-btn danger" onclick="removeLigneCaisse('+i+')">&#128465;</button></div></div>';
-  }).join('') || '<div class="empty">Panier vide. Ajoute des produits ci-dessus.</div>';
-  var derniere = derniereFactureId ? DB.factures.find(function(f){return f.id===derniereFactureId;}) : null;
-  var carteDerniere = derniere ? '<div class="card" style="border:1px solid var(--accent,#c9a227);">' +
-      '<div class="row"><b>Vente enregistrée</b><span class="meta">'+escHtml(derniere.numero)+'</span></div>' +
-      '<div class="meta" style="margin:4px 0 10px;">'+escHtml(derniere.client||'Client non renseigné')+' · '+fmt(derniere.total)+'</div>' +
-      '<button class="btn block" onclick="imprimerFacture(\''+derniere.id+'\',\'normal\')">&#128424; Imprimer la facture</button>' +
-      '<button class="btn secondary block" style="margin-top:8px;" onclick="imprimerFacture(\''+derniere.id+'\',\'ticket\')">&#128424; Imprimer le ticket</button>' +
-      '<button class="btn wa block" style="margin-top:8px;" onclick="partagerFacture(\''+derniere.id+'\')">&#128172; Envoyer sur WhatsApp</button>' +
-      '<button class="btn secondary block" style="margin-top:8px;" onclick="derniereFactureId=null;renderers.produits();">Fermer</button>' +
-    '</div>' : '';
-  return (DB.produits.length ? '' : '<div class="banner-note">Ajoute d\'abord un produit dans l\'onglet Catalogue.</div>') + carteDerniere +
-    '<div class="card">' +
-      '<label>Produit</label><select id="caisseProduit"><option value="">Choisir un produit...</option>'+opts+'</select>' +
-      '<label>Quantité</label><input type="text" inputmode="none" data-pad="1" id="caisseQte" value="1" min="1">' +
-      '<button class="btn secondary block" onclick="addLigneCaisse()">+ Ajouter au panier</button>' +
-    '</div>' +
-    '<h3 class="sub-title">Panier</h3>' + lignes +
-    '<div class="card">' +
-      '<label>Client(e) (optionnel)</label><input type="text" id="caisseClient" list="clientsDatalist" placeholder="Nom" value="'+escHtml(caisseMeta.client)+'" oninput="onCaisseClient(this.value)">' +
-      '<label>Téléphone (optionnel)</label><input type="text" inputmode="none" data-pad="1" id="caisseTel" value="'+escHtml(caisseMeta.tel)+'" oninput="caisseMeta.tel=this.value">' +
-      '<label>Remise (F)</label><input type="text" inputmode="none" data-pad="1" id="caisseRemise" value="'+(caisseMeta.remise||0)+'" onchange="caisseMeta.remise=parseFloat(this.value)||0;renderers.produits();">' +
-      '<div class="row" style="margin:12px 0;"><span>Total à payer</span><b style="font-size:18px;">'+fmt(total)+'</b></div>' +
-      '<button class="btn block" onclick="validerCaisse(\'normal\')">Valider et imprimer la facture</button>' +
-      '<button class="btn secondary block" style="margin-top:8px;" onclick="validerCaisse(\'ticket\')">Valider et imprimer le ticket</button>' +
-      '<button class="btn secondary block" style="margin-top:8px;" onclick="validerCaisse(null)">Valider sans imprimer</button>' +
+}
+function posTicketHtml(kind){
+  var src = posSource(kind), m = src.meta;
+  var sous = src.lignes.reduce(function(a,l){ return a+l.prix*l.qte; },0);
+  var remise = Math.min(m.remise||0, sous);
+  var total = sous - remise;
+  var nb = src.lignes.reduce(function(a,l){ return a+l.qte; },0);
+  var lignes = src.lignes.map(function(l,i){
+    return '<div class="pos-ligne"><div class="pos-ligne-nom">'+escHtml(l.nom)+'<div class="meta">'+fmt(l.prix)+' / unité</div></div>' +
+      '<div class="pos-ligne-bas"><div class="pos-qte"><button onclick="posQte(\''+kind+'\','+i+',-1)">&minus;</button>' +
+      '<span>'+l.qte+'</span><button onclick="posQte(\''+kind+'\','+i+',1)">+</button></div>' +
+      '<span class="price">'+fmt(l.prix*l.qte)+'</span></div></div>';
+  }).join('') || '<div class="empty">Ticket vide. Touche un '+(kind==='soin'?'soin':'produit')+' pour l\'ajouter.</div>';
+  var modes = MODES_PAIEMENT.map(function(md){
+    return '<button class="pos-mode'+((m.paiement||'Espèces')===md?' on':'')+'" onclick="posPaiement(\''+kind+'\',\''+md+'\')">'+md+'</button>';
+  }).join('');
+  return '<div class="row" style="margin-bottom:4px;"><b>Ticket</b><span class="meta">'+nb+' article'+(nb>1?'s':'')+'</span></div>' +
+    lignes +
+    '<label>Client(e)</label><input type="text" id="posClient_'+kind+'" list="clientsDatalist" placeholder="Nom (optionnel)" value="'+escHtml(m.client||'')+'" oninput="posClient(\''+kind+'\',this.value)">' +
+    '<label>Téléphone</label><input type="text" inputmode="none" data-pad="1" id="posTel_'+kind+'" value="'+escHtml(m.tel||'')+'" oninput="posTel(\''+kind+'\',this.value)">' +
+    '<label>Remise (F)</label><input type="text" inputmode="none" data-pad="1" value="'+(m.remise||0)+'" onchange="posRemise(\''+kind+'\',this.value)">' +
+    '<label>Mode de paiement</label><div class="pos-modes">'+modes+'</div>' +
+    '<div class="row" style="margin:12px 0 4px;"><span>Sous-total</span><span>'+fmt(sous)+'</span></div>' +
+    '<div class="row"><span style="font-weight:600;">À payer</span><b style="font-size:20px;">'+fmt(total)+'</b></div>' +
+    '<button class="btn wa block" onclick="posValider(\''+kind+'\',\'wa\')">&#128172; Valider et envoyer sur WhatsApp</button>' +
+    '<button class="btn block" style="margin-top:8px;" onclick="posValider(\''+kind+'\',\'normal\')">Valider et imprimer la facture</button>' +
+    '<button class="btn secondary block" style="margin-top:8px;" onclick="posValider(\''+kind+'\',\'ticket\')">Valider et imprimer le ticket</button>' +
+    '<button class="btn secondary block" style="margin-top:8px;" onclick="posValider(\''+kind+'\',null)">Valider sans imprimer</button>';
+}
+function posCarte(kind){
+  var id = kind==='soin' ? derniereFactureSoinId : derniereFactureId;
+  var f = id ? DB.factures.find(function(x){return x.id===id;}) : null;
+  if(!f) return '';
+  return '<div class="card" style="border:1px solid var(--accent,#c9a227);">' +
+    '<div class="row"><b>Facture enregistrée</b><span class="meta">'+escHtml(f.numero)+'</span></div>' +
+    '<div class="meta" style="margin:4px 0 10px;">'+escHtml(f.client||'Client non renseigné')+' · '+fmt(f.total)+' · '+escHtml(f.paiement||'Espèces')+'</div>' +
+    '<button class="btn wa block" onclick="partagerFacture(\''+f.id+'\')">&#128172; Envoyer sur WhatsApp</button>' +
+    '<button class="btn block" style="margin-top:8px;" onclick="imprimerFacture(\''+f.id+'\',\'normal\')">&#128424; Imprimer la facture</button>' +
+    '<button class="btn secondary block" style="margin-top:8px;" onclick="imprimerFacture(\''+f.id+'\',\'ticket\')">&#128424; Imprimer le ticket</button>' +
+    '<button class="btn secondary block" style="margin-top:8px;" onclick="posFermer(\''+kind+'\')">Fermer</button>' +
+  '</div>';
+}
+function posHtml(kind){
+  var src = posSource(kind);
+  var vide = src.items.length ? '' : '<div class="banner-note">'+(kind==='soin'?'Ajoute d\'abord des soins dans le Catalogue.':'Ajoute d\'abord un produit dans l\'onglet Catalogue.')+'</div>';
+  return vide + posCarte(kind) +
+    '<div class="pos">' +
+      '<div class="pos-gauche">' +
+        '<input type="search" class="pos-rech" placeholder="'+(kind==='soin'?'Rechercher un soin':'Rechercher un produit')+'" value="'+escHtml(src.st.rech)+'" oninput="posRech(\''+kind+'\',this.value)">' +
+        '<div class="pos-chips" id="posChips_'+kind+'">'+posChipsHtml(kind)+'</div>' +
+        '<div class="pos-grid" id="posGrille_'+kind+'">'+posGrilleHtml(kind)+'</div>' +
+      '</div>' +
+      '<div class="pos-ticket" id="posTicket_'+kind+'">'+posTicketHtml(kind)+'</div>' +
     '</div>' + clientsDatalistHtml();
 }
-function onCaisseClient(val){
-  caisseMeta.client = val;
-  var tel = lookupClientPhone(val);
-  if(tel){ caisseMeta.tel = tel; var t = document.getElementById('caisseTel'); if(t) t.value = tel; }
+
+function posRech(kind, v){
+  POS[kind].rech = v;
+  var g = document.getElementById('posGrille_'+kind); if(g) g.innerHTML = posGrilleHtml(kind);
 }
-function addLigneCaisse(){
-  var id = document.getElementById('caisseProduit').value;
-  var qte = parseFloat(document.getElementById('caisseQte').value);
-  if(!id){ showToast('Choisis un produit'); return; }
-  if(!qte || qte<=0){ showToast('Quantité invalide'); return; }
-  var p = DB.produits.find(function(x){return x.id===id;}); if(!p) return;
-  var dejaDansPanier = caisseLignes.filter(function(l){return l.id===id;}).reduce(function(a,l){return a+l.qte;},0);
-  if(dejaDansPanier + qte > stockRestant(p)){ showToast('Stock insuffisant : il reste '+stockRestant(p)+' '+p.nom); return; }
-  var ligne = caisseLignes.find(function(l){return l.id===id;});
-  if(ligne) ligne.qte += qte; else caisseLignes.push({ id:p.id, nom:p.nom, prix:p.prixVente, qte:qte });
-  renderers.produits();
-}
-function removeLigneCaisse(i){ caisseLignes.splice(i,1); renderers.produits(); }
-function validerCaisse(format){
-  if(!caisseLignes.length){ showToast('Le panier est vide'); return; }
-  for(var i=0;i<caisseLignes.length;i++){
-    var l = caisseLignes[i], p = DB.produits.find(function(x){return x.id===l.id;});
-    if(!p || l.qte > stockRestant(p)){ showToast('Stock insuffisant pour '+l.nom); return; }
+function posCat(kind, c){ POS[kind].cat = c; posRefresh(kind); }
+function posAdd(kind, id){
+  var src = posSource(kind), it = src.items.find(function(x){return x.id===id;}); if(!it) return;
+  if(kind==='produit'){
+    var dejaDansTicket = src.lignes.filter(function(l){return l.id===id;}).reduce(function(a,l){return a+l.qte;},0);
+    if(dejaDansTicket + 1 > stockRestant(it)){ showToast('Stock insuffisant : il reste '+stockRestant(it)+' '+it.nom); return; }
   }
-  var sous = caisseLignes.reduce(function(a,l){ return a+l.prix*l.qte; },0);
-  var remise = Math.min(caisseMeta.remise||0, sous);
-  var numero = consumeNumero('factureProduit');
+  var l = src.lignes.find(function(x){return x.id===id;});
+  if(l) l.qte += 1; else src.lignes.push({ id:it.id, nom:it.nom, prix:posPrix(kind,it), qte:1 });
+  posRefresh(kind);
+}
+function posQte(kind, i, d){
+  var src = posSource(kind), l = src.lignes[i]; if(!l) return;
+  if(d>0 && kind==='produit'){
+    var p = DB.produits.find(function(x){return x.id===l.id;});
+    if(p && l.qte + 1 > stockRestant(p)){ showToast('Stock insuffisant : il reste '+stockRestant(p)+' '+p.nom); return; }
+  }
+  l.qte += d;
+  if(l.qte<=0) src.lignes.splice(i,1);
+  posRefresh(kind);
+}
+function posClient(kind, v){
+  var m = posSource(kind).meta; m.client = v;
+  var tel = lookupClientPhone(v);
+  if(tel){ m.tel = tel; var t = document.getElementById('posTel_'+kind); if(t) t.value = tel; }
+}
+function posTel(kind, v){ posSource(kind).meta.tel = v; }
+function posRemise(kind, v){ posSource(kind).meta.remise = parseFloat(v)||0; posRefresh(kind); }
+function posPaiement(kind, mode){ posSource(kind).meta.paiement = mode; posRefresh(kind); }
+function posFermer(kind){
+  if(kind==='soin') derniereFactureSoinId = null; else derniereFactureId = null;
+  posRefresh(kind);
+}
+function posValider(kind, mode){
+  var src = posSource(kind);
+  if(!src.lignes.length){ showToast('Le ticket est vide'); return; }
+  if(kind==='produit'){
+    for(var i=0;i<src.lignes.length;i++){
+      var l = src.lignes[i], p = DB.produits.find(function(x){return x.id===l.id;});
+      if(!p || l.qte > stockRestant(p)){ showToast('Stock insuffisant pour '+l.nom); return; }
+    }
+  }
+  var sous = src.lignes.reduce(function(a,l){ return a+l.prix*l.qte; },0);
+  var remise = Math.min(src.meta.remise||0, sous);
+  var total = sous - remise;
+  var paiement = src.meta.paiement || 'Espèces';
+  var numero = consumeNumero(kind==='soin' ? 'factureSoin' : 'factureProduit');
   var facture = {
-    id:uid(), type:'produit', numero:numero, date:todayISO(),
-    client:(caisseMeta.client||'').trim(), tel:(caisseMeta.tel||'').trim(),
-    lignes:caisseLignes.map(function(l){ return { designation:l.nom, prix:l.prix, qte:l.qte, total:l.prix*l.qte, refId:l.id }; }),
-    remise:remise, total:sous-remise
+    id:uid(), type:(kind==='soin'?'soin':'produit'), numero:numero, date:todayISO(),
+    client:(src.meta.client||'').trim(), tel:(src.meta.tel||'').trim(),
+    lignes:src.lignes.map(function(l){ return { designation:l.nom, prix:l.prix, qte:l.qte, total:l.prix*l.qte, refId:l.id }; }),
+    remise:remise, total:total, paiement:paiement
   };
   DB.factures.push(facture);
   saveKey(KEYS.factures, DB.factures);
-  facturerVersVentes(facture, sous);   // enregistre les ventes et déduit le stock
-  caisseLignes = [];
-  caisseMeta = { client:'', tel:'', remise:0 };
-  derniereFactureId = facture.id;
-  showToast('Vente enregistrée ('+numero+')');
-  renderers.produits();
-  if(format) imprimerFacture(facture.id, format);
+  facturerVersVentes(facture, sous);
+  if(paiement==='À crédit'){
+    DB.dettes.push({ id:uid(), cliente:facture.client || 'Client de passage', date:facture.date, montant:total, note:'Facture '+numero, paye:false });
+    saveKey(KEYS.dettes, DB.dettes);
+  }
+  src.lignes.length = 0;
+  src.meta.client = ''; src.meta.tel = ''; src.meta.remise = 0; src.meta.paiement = 'Espèces';
+  if(kind==='soin') derniereFactureSoinId = facture.id; else derniereFactureId = facture.id;
+  showToast('Facture enregistrée ('+numero+')');
+  posRefresh(kind);
+  if(mode==='normal' || mode==='ticket') imprimerFacture(facture.id, mode);
+  else if(mode==='wa') partagerFacture(facture.id);
 }
 
 /* ---- partage WhatsApp des factures et ventes ---- */
