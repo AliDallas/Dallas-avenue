@@ -332,12 +332,17 @@ var syncPushTimer = null;
 var lastKnownRemoteUpdatedAt = null;
 var syncPollTimer = null;
 
+function nettoyerCle(v){ return String(v||'').replace(/[^\x21-\x7E]/g,''); }
 function getSyncConfig(){
+  var c;
   try{
-    return JSON.parse(localStorage.getItem('sync_config')) || {apiKey:'', binId:'', enabled:false};
+    c = JSON.parse(localStorage.getItem('sync_config')) || {apiKey:'', binId:'', enabled:false};
   }catch(e){
-    return {apiKey:'', binId:'', enabled:false};
+    c = {apiKey:'', binId:'', enabled:false};
   }
+  c.apiKey = nettoyerCle(c.apiKey);
+  c.binId = nettoyerCle(c.binId);
+  return c;
 }
 function saveSyncConfig(cfg){
   localStorage.setItem('sync_config', JSON.stringify(cfg));
@@ -474,8 +479,8 @@ window.addEventListener('offline', function(){
   showToast('Hors ligne : vos modifications seront envoyées au retour de la connexion');
 });
 async function setupSync(){
-  var apiKey = document.getElementById('syncApiKey').value.trim();
-  var binId = document.getElementById('syncBinId').value.trim();
+  var apiKey = nettoyerCle(document.getElementById('syncApiKey').value);
+  var binId = nettoyerCle(document.getElementById('syncBinId').value);
   var enabled = document.getElementById('syncEnabled').checked;
   if(!apiKey){ showToast('Colle ta clé API JSONBin'); return; }
   var cfg = { apiKey:apiKey, binId:binId, enabled:enabled };
