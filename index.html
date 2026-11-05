@@ -361,7 +361,15 @@ function buildFullPayload(){
     clients_repertoire: DB.clients
   };
 }
+function remoteVide(data){
+  return !((data.factures||[]).length || (data.produits_catalogue||[]).length || (data.ventes_produits||[]).length);
+}
 function applyFullPayload(data){
+  if(remoteVide(data) && (DB.factures.length || DB.produits.length || DB.ventes.length)){
+    showToast('Copie vide reçue : tes données sont gardées et renvoyées');
+    marquerEnAttente(true); clearTimeout(syncPushTimer); syncPushTimer = setTimeout(envoyerEnAttente, 1500);
+    return;
+  }
   DB.soins = data.soins_catalogue || [];
   DB.journal = data.soins_journal || [];
   DB.produits = data.produits_catalogue || [];
@@ -2261,6 +2269,7 @@ function exportData(){
   document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
   showToast('Sauvegarde téléchargée');
+  try{ localStorage.setItem('derniere_sauvegarde', todayISO()); }catch(e){}
 }
 
 function importDataFile(input){
@@ -2683,6 +2692,15 @@ function allerA(tab, sub){
   if(tab==='finances'){ financesSub = sub||'depenses'; }
   switchTab(tab);
 }
+function rappelSauvegardeHtml(){
+  if(!isAdmin() || !DB.factures.length) return '';
+  var derniere = null; try{ derniere = localStorage.getItem('derniere_sauvegarde'); }catch(e){}
+  var jours = derniere ? Math.floor((Date.now() - new Date(derniere).getTime())/86400000) : 999;
+  if(jours < 7) return '';
+  return '<div class="banner-note" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+    '<span>'+(derniere ? 'Dernière sauvegarde : '+escHtml(derniere) : 'Aucune sauvegarde faite sur cet appareil')+'</span>' +
+    '<button class="btn small" onclick="switchTab(\'sauvegarde\')">Sauvegarder</button></div>';
+}
 renderers.accueil = function(){
   var el = document.getElementById('view-accueil');
   var auj = todayISO(), mois = auj.slice(0,7);
@@ -2699,7 +2717,7 @@ renderers.accueil = function(){
   var topArr = Object.keys(top).sort(function(a,b){return top[b]-top[a];}).slice(0,3);
   var maxQ = topArr.length ? top[topArr[0]] : 1;
   var d = new Date(); var salut = d.getHours()<12 ? 'Bonjour' : (d.getHours()<18 ? 'Bon après-midi' : 'Bonsoir');
-  el.innerHTML = '<h2 class="section-title">'+salut+(SESSION?' '+escHtml(SESSION.nom):'')+'</h2>' +
+  el.innerHTML = '<h2 class="section-title">'+salut+(SESSION?' '+escHtml(SESSION.nom):'')+'</h2>' + rappelSauvegardeHtml() +
     '<div class="metric-grid">' +
       '<div class="metric"><div class="lbl">Ventes aujourd\'hui</div><div class="val">'+fmt(caJour)+'</div></div>' +
       '<div class="metric"><div class="lbl">Ventes du mois</div><div class="val">'+fmt(caMois)+'</div></div>' +
@@ -2955,6 +2973,7 @@ function allerEdition(id){ produitsSub = 'catalogue'; renderers.produits(); if(i
 
 /* ================= INIT ================= */
 loadAll().then(function(){
+  try{ if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); } }catch(err){}
   showLock('');
   startSyncPolling();
   registerPWA();
