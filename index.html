@@ -846,7 +846,7 @@ renderers.produits = function(){
       '<div class="card" id="prodFormCard">' +
         '<label>Nom du produit</label><input type="text" id="prodNom" placeholder="Ex : Crème hydratante">' +
         '<label>Photo du produit (optionnel)</label>' +
-        '<input type="file" accept="image/*" capture="environment" onchange="handleProdPhoto(this)">' +
+        '<input type="file" accept="image/*" onchange="handleProdPhoto(this)">' +
         '<div id="prodPhotoPreview">'+photoPreviewHtml+'</div>' +
         '<label>Prix d\'achat (hors transport)</label><input type="text" inputmode="none" data-pad="1" id="prodAchat" placeholder="0" oninput="updateProdRevient()">' +
         '<label>% Transport</label><input type="text" inputmode="none" data-pad="1" id="prodPct" placeholder="Ex : 5 pour 5%" oninput="updateProdRevient()">' +
