@@ -428,7 +428,7 @@ async function cloudPush(){
     headers: { 'Content-Type':'application/json', 'X-Master-Key': cfg.apiKey },
     body: JSON.stringify(payload)
   });
-  if(!res.ok) throw new Error('push_failed');
+  if(!res.ok) throw new Error('push_failed:'+res.status);
   lastKnownRemoteUpdatedAt = payload.updated_at;
 }
 async function cloudPull(){
@@ -437,7 +437,7 @@ async function cloudPull(){
   var res = await fetch('https://api.jsonbin.io/v3/b/'+cfg.binId+'/latest', {
     headers: { 'X-Master-Key': cfg.apiKey }
   });
-  if(!res.ok) throw new Error('pull_failed');
+  if(!res.ok) throw new Error('pull_failed:'+res.status);
   var json = await res.json();
   return json.record || json;
 }
@@ -497,8 +497,17 @@ async function setupSync(){
     startSyncPolling();
     renderers.finances();
   }catch(e){
-    showToast('Échec de connexion - vérifie la clé et l\'ID');
+    showToast('Connexion impossible : ' + expliquerErreurSync(e));
   }
+}
+function expliquerErreurSync(e){
+  var m = String((e && e.message) || e || '');
+  if(/:(401|403)$/.test(m)) return 'Clé API refusée : vérifie la Master Key (copie-la entière)';
+  if(/:404$/.test(m)) return 'ID de synchro introuvable : vérifie l\'identifiant';
+  if(/:429$/.test(m)) return 'Trop de requêtes : réessaie dans une minute';
+  if(/:(\d{3})$/.test(m)) return 'Erreur JSONBin ' + m.split(':').pop();
+  if(e && e.name === 'TypeError') return 'Pas de connexion à JSONBin (réseau ou internet coupé)';
+  return 'Erreur : ' + m;
 }
 async function syncMaintenant(){
   var cfg = getSyncConfig();
@@ -515,7 +524,7 @@ async function syncMaintenant(){
     await cloudPush();
     showToast('Synchronisé avec succès');
   }catch(e){
-    showToast('Synchronisation impossible - vérifie ta connexion');
+    showToast('Synchronisation impossible : ' + expliquerErreurSync(e));
   }
 }
 function startSyncPolling(){
