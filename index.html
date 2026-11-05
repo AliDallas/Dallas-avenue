@@ -333,17 +333,7 @@ var lastKnownRemoteUpdatedAt = null;
 var syncPollTimer = null;
 
 function nettoyerCle(v){ return String(v||'').replace(/[^\x21-\x7E]/g,''); }
-function getSyncConfig(){
-  var c;
-  try{
-    c = JSON.parse(localStorage.getItem('sync_config')) || {apiKey:'', binId:'', enabled:false};
-  }catch(e){
-    c = {apiKey:'', binId:'', enabled:false};
-  }
-  c.apiKey = nettoyerCle(c.apiKey);
-  c.binId = nettoyerCle(c.binId);
-  return c;
-}
+function getSyncConfig(){ return { apiKey:SUPA_KEY, binId:'tout', enabled:true }; }
 function saveSyncConfig(cfg){
   localStorage.setItem('sync_config', JSON.stringify(cfg));
 }
@@ -424,27 +414,24 @@ async function cloudCreateBin(cfg){
   if(!id) throw new Error('no_id');
   return id;
 }
+var SUPA_URL = 'https://yhblpurxywclgkskgqkz.supabase.co';
+var SUPA_KEY = 'sb_publishable_bRNwMiAAHaUUfs7ftnOjxA_M0PjowoE';
+function supaHeaders(extra){ return Object.assign({'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}, extra||{}); }
 async function cloudPush(){
-  var cfg = getSyncConfig();
-  if(!cfg.apiKey || !cfg.binId) return;
   var payload = buildFullPayload();
-  var res = await fetch('https://api.jsonbin.io/v3/b/'+cfg.binId, {
-    method:'PUT',
-    headers: { 'Content-Type':'application/json', 'X-Master-Key': cfg.apiKey },
-    body: JSON.stringify(payload)
+  var res = await fetch(SUPA_URL+'/rest/v1/donnees?on_conflict=cle', {
+    method:'POST',
+    headers: supaHeaders({'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}),
+    body: JSON.stringify([{ cle:'tout', valeur:payload, maj:new Date().toISOString() }])
   });
   if(!res.ok) throw new Error('push_failed:'+res.status);
   lastKnownRemoteUpdatedAt = payload.updated_at;
 }
 async function cloudPull(){
-  var cfg = getSyncConfig();
-  if(!cfg.apiKey || !cfg.binId) return null;
-  var res = await fetch('https://api.jsonbin.io/v3/b/'+cfg.binId+'/latest', {
-    headers: { 'X-Master-Key': cfg.apiKey }
-  });
+  var res = await fetch(SUPA_URL+'/rest/v1/donnees?cle=eq.tout&select=valeur', { headers: supaHeaders() });
   if(!res.ok) throw new Error('pull_failed:'+res.status);
-  var json = await res.json();
-  return json.record || json;
+  var rows = await res.json();
+  return (rows && rows[0] && rows[0].valeur) || null;
 }
 /* Hors ligne : chaque modification est marquée « en attente » et envoyée
    dès que la connexion revient (ou au prochain essai automatique). */
@@ -979,6 +966,16 @@ function editProduit(id){
   updateProdRevient();
   document.getElementById('prodFormCard').scrollIntoView({behavior:'smooth'});
 }
+function envoyerPhotoSupabase(blob, nom){
+  return fetch(SUPA_URL+'/storage/v1/object/photos/'+nom, {
+    method:'POST',
+    headers: supaHeaders({'Content-Type':'image/jpeg','x-upsert':'true'}),
+    body: blob
+  }).then(function(res){
+    if(!res.ok) throw new Error('photo:'+res.status);
+    return SUPA_URL+'/storage/v1/object/public/photos/'+nom;
+  });
+}
 function handleProdPhoto(input){
   var file = input.files && input.files[0];
   if(!file) return;
@@ -992,10 +989,21 @@ function handleProdPhoto(input){
       var canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
       canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-      prodPhotoTemp = dataUrl;
-      var prev = document.getElementById('prodPhotoPreview');
-      if(prev) prev.innerHTML = '<img src="'+dataUrl+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">';
+      function afficher(src){
+        prodPhotoTemp = src;
+        var prev = document.getElementById('prodPhotoPreview');
+        if(prev) prev.innerHTML = '<img src="'+src+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">';
+      }
+      canvas.toBlob(function(blob){
+        var nom = 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6) + '.jpg';
+        envoyerPhotoSupabase(blob, nom).then(function(url){
+          afficher(url);
+          showToast('Photo envoyée en ligne');
+        }).catch(function(){
+          afficher(canvas.toDataURL('image/jpeg', 0.7));
+          showToast('Photo non envoyée en ligne : gardée sur cet appareil');
+        });
+      }, 'image/jpeg', 0.7);
     };
     img.src = e.target.result;
   };
@@ -2068,7 +2076,7 @@ async function publierBoutique(){ if(!isAdmin()){ showToast('Réservé aux admin
       prixBarre: (p.prixBarre && p.prixBarre > p.prixVente) ? p.prixBarre : 0,
       reste: (stockRestant(p) > 0 && stockRestant(p) <= 3) ? stockRestant(p) : 0,
       dispo: stockRestant(p) > 0,
-      photo: await reduirePhoto(p.photo, 560)
+      photo: (p.photo && p.photo.indexOf('http')===0) ? p.photo : await reduirePhoto(p.photo, 560)
     });
   }
   var payload = { maj: new Date().toISOString(), whatsapp: '22371747415', produits: items };
