@@ -318,8 +318,47 @@ async function loadKey(key, seed){
     return seed;
   }
 }
+/* ===== Synchronisation par fusion : chaque élément porte la date de sa dernière modification (maj).
+   Avant chaque envoi, l'appli récupère la copie en ligne et fusionne élément par élément ; le plus récent gagne.
+   Un appareil resté en retard ne peut donc plus effacer les photos, descriptions, ventes ou factures des autres. ===== */
+var LISTES_SYNC = ['soins','journal','produits','ventes','factures','depenses','dettes','pertes','fournisseurs','achats','commandes','utilisateurs','clients'];
+var CHAMP_SYNC = {soins:'soins_catalogue', journal:'soins_journal', produits:'produits_catalogue', ventes:'ventes_produits', factures:'factures', depenses:'depenses', dettes:'dettes_clients', pertes:'pertes', fournisseurs:'fournisseurs', achats:'achats_fournisseurs', commandes:'commandes_boutique', utilisateurs:'utilisateurs', clients:'clients_repertoire'};
+var SNAP = {};
+var TOMBES = {};
+function sigItem(it){ var c = {}; Object.keys(it).sort().forEach(function(k){ if(k!=='maj') c[k] = it[k]; }); return JSON.stringify(c); }
+function snapListe(arr){ var m = {}; (arr||[]).forEach(function(it){ if(it && it.id!=null) m[it.id] = sigItem(it); }); return m; }
+function chargerTombes(){ try{ TOMBES = JSON.parse(localStorage.getItem('tombes_sync') || '{}') || {}; }catch(e){ TOMBES = {}; } }
+function sauverTombes(){ try{ localStorage.setItem('tombes_sync', JSON.stringify(TOMBES)); }catch(e){} }
+function initSnaps(){ LISTES_SYNC.forEach(function(db){ SNAP[db] = snapListe(DB[db]); }); chargerTombes(); }
+function dbDeCle(key){ for(var k in KEYS){ if(KEYS[k] === key) return k; } return null; }
+function marquerModifs(db, arr){
+  var now = new Date().toISOString();
+  var avant = SNAP[db];
+  var init = !avant;
+  avant = avant || {};
+  var apres = {};
+  var tombes = TOMBES[db] || (TOMBES[db] = []);
+  (arr || []).forEach(function(it){
+    if(!it || it.id==null) return;
+    var s = sigItem(it);
+    if(!init && avant[it.id] !== s){
+      it.maj = now;                                   // modifié ou nouveau
+      TOMBES[db] = tombes = tombes.filter(function(t){ return String(t.id) !== String(it.id); }); // réapparu
+    }
+    apres[it.id] = s;
+  });
+  if(!init){
+    Object.keys(avant).forEach(function(id){
+      if(apres[id] === undefined && !tombes.some(function(t){ return String(t.id) === String(id); })) tombes.push({id:id, maj:now});
+    });
+    sauverTombes();
+  }
+  SNAP[db] = apres;
+}
 async function saveKey(key, data){
   try{
+    var db = dbDeCle(key);
+    if(db && Array.isArray(data)) marquerModifs(db, data);
     localStorage.setItem(key, JSON.stringify(data));
     if(key !== 'sync_config') scheduleCloudPush();
   }catch(e){
@@ -353,7 +392,8 @@ function buildFullPayload(){
     commandes_boutique: DB.commandes,
     utilisateurs: DB.utilisateurs,
     compteurs_numerotation: DB.compteurs,
-    clients_repertoire: DB.clients
+    clients_repertoire: DB.clients,
+    supprimes: TOMBES
   };
 }
 function remoteVide(data){
@@ -394,6 +434,7 @@ function applyFullPayload(data){
   try{ revalidateSession(); }catch(e){}
   localStorage.setItem(KEYS.compteurs, JSON.stringify(DB.compteurs));
   localStorage.setItem(KEYS.clients, JSON.stringify(DB.clients));
+  initSnaps();
 }
 function renderCurrentView(){
   var active = document.querySelector('.view.active');
@@ -417,8 +458,65 @@ async function cloudCreateBin(cfg){
 var SUPA_URL = 'https://yhblpurxywclgkskgqkz.supabase.co';
 var SUPA_KEY = 'sb_publishable_bRNwMiAAHaUUfs7ftnOjxA_M0PjowoE';
 function supaHeaders(extra){ return Object.assign({'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}, extra||{}); }
+function fusionListe(local, distant, tombes){
+  var morts = {}; (tombes || []).forEach(function(t){ morts[String(t.id)] = true; });
+  var map = {}, ordre = [];
+  (distant || []).forEach(function(it){
+    if(!it || it.id==null || morts[String(it.id)]) return;
+    if(!map[it.id]) ordre.push(it.id);
+    map[it.id] = it;
+  });
+  (local || []).forEach(function(it){
+    if(!it || it.id==null || morts[String(it.id)]) return;
+    var d = map[it.id];
+    if(!d){ ordre.push(it.id); map[it.id] = it; return; }
+    if((it.maj||'') > (d.maj||'')) map[it.id] = it;
+  });
+  return ordre.map(function(id){ return map[id]; });
+}
+function fusionnerDistant(distant){
+  if(!distant) return { besoinEnvoi:false };
+  var morts = distant.supprimes || {};
+  var besoin = false;
+  LISTES_SYNC.forEach(function(db){
+    var local = DB[db] || [];
+    var dist = distant[CHAMP_SYNC[db]] || [];
+    var mortsDist = morts[db] || [];
+    var tombesLoc = TOMBES[db] || [];
+    var fus = fusionListe(local, dist, tombesLoc.concat(mortsDist));
+    var idsDist = {}; dist.forEach(function(it){ if(it && it.id!=null) idsDist[it.id] = it; });
+    local.forEach(function(it){
+      if(!it || it.id==null) return;
+      var d = idsDist[it.id];
+      if(!d || (it.maj||'') > (d.maj||'')) besoin = true;     // il manque chez l'autre, ou plus récent ici
+    });
+    tombesLoc.forEach(function(t){ if(!mortsDist.some(function(x){ return String(x.id)===String(t.id); })) besoin = true; });
+    DB[db] = fus;
+    var union = tombesLoc.slice();
+    mortsDist.forEach(function(x){ if(!union.some(function(y){ return String(y.id)===String(x.id); })) union.push(x); });
+    TOMBES[db] = union;
+  });
+  if(distant.compteurs_numerotation){
+    var c = distant.compteurs_numerotation, l = DB.compteurs || {};
+    ['factureProduit','factureSoin','vente'].forEach(function(k){
+      if((l[k]||0) > (c[k]||0)) besoin = true;
+    });
+    var m = Object.assign({}, c, l);
+    ['factureProduit','factureSoin','vente'].forEach(function(k){ m[k] = Math.max(l[k]||0, c[k]||0); });
+    DB.compteurs = m;
+  }
+  LISTES_SYNC.forEach(function(db){
+    try{ localStorage.setItem(KEYS[db], JSON.stringify(DB[db])); }catch(e){}
+  });
+  try{ localStorage.setItem(KEYS.compteurs, JSON.stringify(DB.compteurs)); }catch(e){}
+  sauverTombes();
+  initSnaps();
+  return { besoinEnvoi: besoin };
+}
 async function cloudPush(){
-  var payload = buildFullPayload();
+  var distant = await cloudPull();          // 1. récupérer la copie en ligne
+  if(distant) fusionnerDistant(distant);     // 2. fusionner, sans rien effacer
+  var payload = buildFullPayload();          // 3. envoyer le résultat fusionné
   var res = await fetch(SUPA_URL+'/rest/v1/donnees?on_conflict=cle', {
     method:'POST',
     headers: supaHeaders({'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}),
@@ -509,7 +607,7 @@ async function syncMaintenant(){
     if(syncEnAttente()){ await cloudPush(); marquerEnAttente(false); showToast('Synchronisé avec succès'); return; }
     var remote = await cloudPull();
     if(remote && remote.updated_at && remote.updated_at !== lastKnownRemoteUpdatedAt){
-      applyFullPayload(remote);
+      fusionnerDistant(remote);
       lastKnownRemoteUpdatedAt = remote.updated_at;
       renderCurrentView();
     }
@@ -527,9 +625,10 @@ function startSyncPolling(){
     if(syncEnAttente()){ envoyerEnAttente(); return; } // ne jamais écraser des modifications locales non envoyées
     cloudPull().then(function(remote){
       if(remote && remote.updated_at && remote.updated_at !== lastKnownRemoteUpdatedAt){
-        applyFullPayload(remote);
+        var r = fusionnerDistant(remote);
         lastKnownRemoteUpdatedAt = remote.updated_at;
         renderCurrentView();
+        if(r.besoinEnvoi) scheduleCloudPush();
         showToast('Données mises à jour (autre appareil)');
       }
     }).catch(function(){});
@@ -577,6 +676,7 @@ async function loadAll(){
     DB.compteurs = { factureProduit:maxFP, factureSoin:maxFS, vente:0 };
     saveKey(KEYS.compteurs, DB.compteurs);
   }
+  initSnaps();
 }
 function peekNumero(type){
   var n = (DB.compteurs[type]||0) + 1;
@@ -983,12 +1083,15 @@ function handleProdPhoto(input){
   reader.onload = function(e){
     var img = new Image();
     img.onload = function(){
-      var maxDim = 640;
-      var scale = Math.min(1, maxDim/Math.max(img.width, img.height));
-      var cw = Math.round(img.width*scale), ch = Math.round(img.height*scale);
+      // Carré de fond blanc : la photo entière rentre dedans, centrée, sans être coupée
+      var size = 640;
       var canvas = document.createElement('canvas');
-      canvas.width = cw; canvas.height = ch;
-      canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      canvas.width = size; canvas.height = size;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size);
+      var k = Math.min(size/img.width, size/img.height);
+      var dw = Math.round(img.width*k), dh = Math.round(img.height*k);
+      ctx.drawImage(img, Math.round((size-dw)/2), Math.round((size-dh)/2), dw, dh);
       function afficher(src){
         prodPhotoTemp = src;
         var prev = document.getElementById('prodPhotoPreview');
@@ -2316,6 +2419,7 @@ function importDataFile(input){
       if(data.utilisateurs && data.utilisateurs.length) DB.utilisateurs = data.utilisateurs;
       DB.compteurs = data.compteurs_numerotation || DB.compteurs;
       DB.clients = data.clients_repertoire || [];
+      SNAP = {};
       saveKey(KEYS.soins, DB.soins);
       saveKey(KEYS.journal, DB.journal);
       saveKey(KEYS.produits, DB.produits);
