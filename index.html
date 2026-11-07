@@ -1248,7 +1248,7 @@ function posTuile(kind, it){
   var prix = posPrix(kind, it);
   var rest = kind==='produit' ? stockRestant(it) : null;
   var epuise = kind==='produit' && rest<=0;
-  var img = (kind==='produit' && it.photo)
+  var img = (it.photo)
     ? '<img src="'+it.photo+'" alt="">'
     : '<span class="pos-init">'+escHtml(String(it.nom||'?').charAt(0).toUpperCase())+'</span>';
   return '<button class="pos-tile" '+(epuise?'disabled':'')+' onclick="posAdd(\''+kind+'\',\''+it.id+'\')">' +
