@@ -759,7 +759,7 @@ renderers.soins = function(){
     var catalogueHtml = Object.keys(cats).map(function(cat){
       var items = cats[cat].map(function(s){
         return '<div class="item">' +
-          '<div class="row" style="gap:10px;">' + (s.photo ? '<img src="'+s.photo+'" style="width:44px;height:44px;object-fit:contain;background:#fff;border-radius:6px;">' : '') + '<div class="name">'+escHtml(s.nom)+'</div></div>' +
+          '<div class="row" style="gap:10px;">' + (s.photo ? '<img src="'+s.photo+'" style="width:44px;height:44px;object-fit:contain;background:#fff;border-radius:6px;">' : '') + '<div><div class="name">'+escHtml(s.nom)+'</div>' + (s.description ? '<div class="sub" style="font-size:12px;opacity:.75;">'+escHtml(s.description)+'</div>' : '') + '</div></div>' +
           '<div class="row" style="gap:6px;">' +
             '<span class="price">'+fmt(s.prix)+'</span>' +
             '<button class="icon-btn" onclick="editSoin(\''+s.id+'\')">&#9998;</button>' +
@@ -774,6 +774,7 @@ renderers.soins = function(){
         '<label>Catégorie</label><input type="text" id="soinCat" placeholder="Ex : SOINS DU VISAGE">' +
         '<label>Nom du soin</label><input type="text" id="soinNom" placeholder="Ex : Soin éclat">' +
         '<label>Prix (F)</label><input type="text" inputmode="none" data-pad="1" id="soinPrix" placeholder="0">' +
+        '<label>Description du soin (facultatif)</label><textarea id="soinDesc" rows="3" placeholder="Ex : Nettoyage en profondeur, peau propre et lumineuse"></textarea>' +
         '<label>Photo du soin (facultatif)</label><input type="file" accept="image/*" onchange="handleSoinPhoto(this)">' +
         '<div id="soinPhotoPreview">'+(soinPhotoTemp ? '<img src="'+soinPhotoTemp+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">' : '')+'</div>' +
         '<button class="btn block" id="soinFormBtn" onclick="saveSoin()">Ajouter au catalogue</button>' +
@@ -840,6 +841,7 @@ function editSoin(id){
   document.getElementById('soinCat').value = s.categorie;
   document.getElementById('soinNom').value = s.nom;
   document.getElementById('soinPrix').value = s.prix;
+  document.getElementById('soinDesc').value = s.description || '';
   soinPhotoTemp = s.photo || null;
   var prevS = document.getElementById('soinPhotoPreview');
   if(prevS) prevS.innerHTML = soinPhotoTemp ? '<img src="'+soinPhotoTemp+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">' : '';
@@ -885,13 +887,14 @@ function saveSoin(){
   var cat = document.getElementById('soinCat').value.trim();
   var nom = document.getElementById('soinNom').value.trim();
   var prix = parseFloat(document.getElementById('soinPrix').value);
+  var desc = document.getElementById('soinDesc').value.trim();
   if(!cat || !nom || isNaN(prix)){ showToast('Remplis tous les champs'); return; }
   if(editingSoinId){
     var s = DB.soins.find(function(x){return x.id===editingSoinId;});
-    s.categorie=cat; s.nom=nom; s.prix=prix; s.photo = soinPhotoTemp || null;
+    s.categorie=cat; s.nom=nom; s.prix=prix; s.photo = soinPhotoTemp || null; s.description = desc;
     editingSoinId = null;
   } else {
-    DB.soins.push({ id:uid(), categorie:cat, nom:nom, prix:prix, photo: soinPhotoTemp || null });
+    DB.soins.push({ id:uid(), categorie:cat, nom:nom, prix:prix, photo: soinPhotoTemp || null, description: desc });
   }
   soinPhotoTemp = null;
   saveKey(KEYS.soins, DB.soins);
