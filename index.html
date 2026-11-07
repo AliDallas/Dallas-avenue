@@ -280,6 +280,7 @@ var DB = { soins: [], journal: [], produits: [], ventes: [], factures: [], depen
 var KEYS = { soins:'soins_catalogue', journal:'soins_journal', produits:'produits_catalogue', ventes:'ventes_produits', factures:'factures', depenses:'depenses', dettes:'dettes_clients', pertes:'pertes', fournisseurs:'fournisseurs', achats:'achats_fournisseurs', commandes:'commandes_boutique', utilisateurs:'utilisateurs', compteurs:'compteurs_numerotation', clients:'clients_repertoire' };
 var editingSoinId = null, editingProduitId = null;
 var prodPhotoTemp = null;
+var soinPhotoTemp = null;
 var nouvelleFactureLignes = [];
 var nouvelleFactureMeta = { numero:null, date:null, client:'', tel:'', remise:0 };
 var soinsSub = 'catalogue';
@@ -758,7 +759,7 @@ renderers.soins = function(){
     var catalogueHtml = Object.keys(cats).map(function(cat){
       var items = cats[cat].map(function(s){
         return '<div class="item">' +
-          '<div><div class="name">'+escHtml(s.nom)+'</div></div>' +
+          '<div class="row" style="gap:10px;">' + (s.photo ? '<img src="'+s.photo+'" style="width:44px;height:44px;object-fit:contain;background:#fff;border-radius:6px;">' : '') + '<div class="name">'+escHtml(s.nom)+'</div></div>' +
           '<div class="row" style="gap:6px;">' +
             '<span class="price">'+fmt(s.prix)+'</span>' +
             '<button class="icon-btn" onclick="editSoin(\''+s.id+'\')">&#9998;</button>' +
@@ -773,6 +774,8 @@ renderers.soins = function(){
         '<label>Catégorie</label><input type="text" id="soinCat" placeholder="Ex : SOINS DU VISAGE">' +
         '<label>Nom du soin</label><input type="text" id="soinNom" placeholder="Ex : Soin éclat">' +
         '<label>Prix (F)</label><input type="text" inputmode="none" data-pad="1" id="soinPrix" placeholder="0">' +
+        '<label>Photo du soin (facultatif)</label><input type="file" accept="image/*" onchange="handleSoinPhoto(this)">' +
+        '<div id="soinPhotoPreview">'+(soinPhotoTemp ? '<img src="'+soinPhotoTemp+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">' : '')+'</div>' +
         '<button class="btn block" id="soinFormBtn" onclick="saveSoin()">Ajouter au catalogue</button>' +
       '</div>' + catalogueHtml;
   } else if(soinsSub === 'journal'){
@@ -837,8 +840,46 @@ function editSoin(id){
   document.getElementById('soinCat').value = s.categorie;
   document.getElementById('soinNom').value = s.nom;
   document.getElementById('soinPrix').value = s.prix;
+  soinPhotoTemp = s.photo || null;
+  var prevS = document.getElementById('soinPhotoPreview');
+  if(prevS) prevS.innerHTML = soinPhotoTemp ? '<img src="'+soinPhotoTemp+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">' : '';
   document.getElementById('soinFormBtn').textContent = 'Enregistrer les modifications';
   document.getElementById('soinFormCard').scrollIntoView({behavior:'smooth'});
+}
+function handleSoinPhoto(input){
+  var file = input.files && input.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var size = 640;
+      var canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size);
+      var k = Math.min(size/img.width, size/img.height);
+      var dw = Math.round(img.width*k), dh = Math.round(img.height*k);
+      ctx.drawImage(img, Math.round((size-dw)/2), Math.round((size-dh)/2), dw, dh);
+      function afficher(src){
+        soinPhotoTemp = src;
+        var prev = document.getElementById('soinPhotoPreview');
+        if(prev) prev.innerHTML = '<img src="'+src+'" style="width:100%;max-width:180px;border-radius:8px;margin-top:8px;display:block;">';
+      }
+      canvas.toBlob(function(blob){
+        var nom = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6) + '.jpg';
+        envoyerPhotoSupabase(blob, nom).then(function(url){
+          afficher(url);
+          showToast('Photo envoyée en ligne');
+        }).catch(function(){
+          afficher(canvas.toDataURL('image/jpeg', 0.7));
+          showToast('Photo non envoyée en ligne : gardée sur cet appareil');
+        });
+      }, 'image/jpeg', 0.7);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 function saveSoin(){
   var cat = document.getElementById('soinCat').value.trim();
@@ -847,11 +888,12 @@ function saveSoin(){
   if(!cat || !nom || isNaN(prix)){ showToast('Remplis tous les champs'); return; }
   if(editingSoinId){
     var s = DB.soins.find(function(x){return x.id===editingSoinId;});
-    s.categorie=cat; s.nom=nom; s.prix=prix;
+    s.categorie=cat; s.nom=nom; s.prix=prix; s.photo = soinPhotoTemp || null;
     editingSoinId = null;
   } else {
-    DB.soins.push({ id:uid(), categorie:cat, nom:nom, prix:prix });
+    DB.soins.push({ id:uid(), categorie:cat, nom:nom, prix:prix, photo: soinPhotoTemp || null });
   }
+  soinPhotoTemp = null;
   saveKey(KEYS.soins, DB.soins);
   showToast('Catalogue mis à jour');
   renderers.soins();
