@@ -1035,7 +1035,7 @@ renderers.produits = function(){
       return '<option value="'+p.id+'">'+escHtml(p.nom)+' ('+fmt(p.prixVente)+')</option>';
     }).join('');
     var facVues = {};
-    var ventesList = DB.ventes.slice().reverse().slice(0,40).map(function(v){
+    var ventesList = histFiltrer('ventes', DB.ventes, function(v){ return v.date; }).slice().reverse().slice(0,300).map(function(v){
       var facNum = v.facture, fac = facNum ? DB.factures.find(function(f){return f.numero===facNum;}) : null;
       var premiere = facNum ? !facVues[facNum] : true;
       if(facNum) facVues[facNum] = 1;
@@ -1054,7 +1054,7 @@ renderers.produits = function(){
         '<button class="icon-btn danger" onclick="deleteVente(\''+v.id+'\')">&#128465;</button>' +
         '</div></div>';
     }).join('') || '<div class="empty">Aucune vente enregistrée.</div>';
-    body = '<button class="btn secondary block" style="margin-bottom:12px;" onclick="setProduitsSub(\'etiquettes\')">&#127991; Imprimer des étiquettes pour les rayons</button>' + posHtml('produit') + '<h3 class="sub-title">Journal des ventes</h3>' + ventesList;
+    body = '<button class="btn secondary block" style="margin-bottom:12px;" onclick="setProduitsSub(\'etiquettes\')">&#127991; Imprimer des étiquettes pour les rayons</button>' + posHtml('produit') + '<h3 class="sub-title">Historique des ventes</h3>' + histBarHtml('ventes', histTotalHtml(histFiltrer('ventes', DB.ventes, function(v){ return v.date; }))) + ventesList;
   } else {
     var ventesF = produitsPeriode ? DB.ventes.filter(function(v){return inPeriode(v.date, produitsPeriode);}) : DB.ventes;
     var caProduits = ventesF.reduce(function(a,v){return a+v.total;},0);
@@ -1514,10 +1514,54 @@ function demanderCodeAdmin(message, onOk){
   document.getElementById('codeAdminOk').onclick = valider;
   input.onkeydown = function(e){ if(e.key==='Enter') valider(); };
 }
+/* ================= HISTORIQUE PAR PÉRIODE (caisse et ventes) ================= */
+var histState = {
+  'ventes':    { mode:'jour', debut:'', fin:'' },
+  'fac-soin':  { mode:'jour', debut:'', fin:'' },
+  'fac-produit': { mode:'jour', debut:'', fin:'' }
+};
+function histBornes(st){
+  var t = todayISO(), d = new Date();
+  if(st.mode==='jour') return [t, t];
+  if(st.mode==='semaine'){ var dow = (d.getDay()+6)%7; var m = new Date(d); m.setDate(d.getDate()-dow); return [m.toISOString().slice(0,10), t]; }
+  if(st.mode==='mois') return [t.slice(0,8)+'01', t];
+  if(st.mode==='annee') return [t.slice(0,4)+'-01-01', t];
+  if(st.mode==='perso'){ var a = st.debut || t, b = st.fin || a; return a<=b ? [a,b] : [b,a]; }
+  return null; /* tout */
+}
+function histFiltrer(key, arr, dateOf){
+  var b = histBornes(histState[key] || {mode:'tout'});
+  if(!b) return arr.slice();
+  return arr.filter(function(x){ var dt = dateOf(x) || ''; return dt>=b[0] && dt<=b[1]; });
+}
+function histTotalHtml(liste){
+  var tot = liste.reduce(function(a,x){ return a+(x.total||0); },0);
+  return '<div class="meta" style="margin:6px 0;">'+liste.length+' vente(s) · total '+fmt(tot)+'</div>';
+}
+function histBarHtml(key, resume){
+  var st = histState[key];
+  var modes = [['jour','Aujourd\'hui'],['semaine','Cette semaine'],['mois','Ce mois'],['annee','Cette année'],['perso','Dates'],['tout','Tout']];
+  var btns = modes.map(function(m){ return '<button class="'+(st.mode===m[0]?'active':'')+'" onclick="setHist(\''+key+'\',\''+m[0]+'\')">'+m[1]+'</button>'; }).join('');
+  var dates = st.mode==='perso'
+    ? '<div class="row" style="gap:6px;margin-top:6px;"><input type="date" value="'+(st.debut||todayISO())+'" onchange="setHistDate(\''+key+'\',\'debut\',this.value)"><input type="date" value="'+(st.fin||todayISO())+'" onchange="setHistDate(\''+key+'\',\'fin\',this.value)"></div>'
+    : '';
+  return '<div class="subtabs" style="flex-wrap:wrap;">'+btns+'</div>' + dates + (resume||'');
+}
+function setHist(key, mode){
+  histState[key].mode = mode;
+  if(mode==='perso'){ if(!histState[key].debut) histState[key].debut = todayISO(); if(!histState[key].fin) histState[key].fin = histState[key].debut; }
+  rerenderHist(key);
+}
+function setHistDate(key, champ, v){ histState[key][champ] = v; rerenderHist(key); }
+function rerenderHist(key){
+  if(key==='ventes') renderers.produits();
+  else posRefresh(key==='fac-soin' ? 'soin' : 'produit');
+}
 function posFacturesRecentes(kind){
-  var liste = DB.factures.filter(function(f){ return (f.type==='soin') === (kind==='soin'); }).slice().reverse().slice(0,8);
-  if(!liste.length) return '';
-  return '<h3 class="sub-title">Dernières factures</h3>' + liste.map(function(f){
+  var key = kind==='soin' ? 'fac-soin' : 'fac-produit';
+  var base = DB.factures.filter(function(f){ return (f.type==='soin') === (kind==='soin'); });
+  var liste = histFiltrer(key, base, function(f){ return f.date; }).slice().reverse().slice(0,300);
+  var lignes = liste.map(function(f){
     return '<div class="item"><div>' +
       '<div class="name"><span class="meta">'+escHtml(f.numero)+'</span> '+escHtml(f.client||'Client de passage')+'</div>' +
       '<div class="meta">'+f.date+' · '+escHtml(f.paiement||'Espèces')+'</div></div>' +
@@ -1526,6 +1570,8 @@ function posFacturesRecentes(kind){
       '<button class="icon-btn" title="Imprimer la facture" onclick="imprimerFacture(\''+f.id+'\',\'normal\')">&#128424;</button>' +
       '<button class="btn secondary small" onclick="posSupprimerFacture(\''+f.id+'\',\''+kind+'\')">Supprimer</button></div></div>';
   }).join('');
+  return '<h3 class="sub-title">Historique des factures</h3>' + histBarHtml(key, histTotalHtml(liste)) +
+    (lignes || '<div class="empty">Aucune facture sur cette période.</div>');
 }
 function posSupprimerFacture(id, kind){
   var f = DB.factures.find(function(x){ return x.id===id; }); if(!f) return;
