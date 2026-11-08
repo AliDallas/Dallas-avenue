@@ -1305,6 +1305,7 @@ function posTuile(kind, it){
     : '<span class="pos-init">'+escHtml(String(it.nom||'?').charAt(0).toUpperCase())+'</span>';
   return '<button class="pos-tile" '+(epuise?'disabled':'')+' onclick="posAdd(\''+kind+'\',\''+it.id+'\')">' +
     '<div class="pos-img">'+img+'</div>' +
+    (kind==='produit' ? '<div style="margin:2px 0;">'+boutiqueBadgeHtml(it.boutique)+'</div>' : '') +
     '<div class="pos-nom">'+escHtml(it.nom)+'</div>' +
     '<div class="pos-prix">'+fmt(prix)+'</div>' +
     (kind==='produit' ? '<div class="pos-stk">'+(epuise?'Rupture':rest+' en stock')+'</div>' : '') +
