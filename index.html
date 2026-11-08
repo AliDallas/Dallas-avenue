@@ -1897,36 +1897,61 @@ function factureHtmlNormal(f){
     '</body></html>';
 }
 function factureHtmlTicket(f){
-  var lignes = f.lignes.map(function(l){
-    return '<div class="li"><div>'+escHtml(l.designation)+'</div>' +
-      '<div class="row"><span>'+l.qte+' x '+fmt(l.prix)+'</span><span>'+fmt(l.total)+'</span></div></div>';
-  }).join('');
+  /* Ticket thermique 80 mm, réglage 48 caractères par ligne, longueur automatique */
+  var W = 48;
+  function c(s){ s=String(s); var p=Math.max(0,Math.floor((W-s.length)/2)); return ' '.repeat(p)+s; }
+  function lr(a,b){ a=String(a); b=String(b); var sp=W-a.length-b.length; if(sp<1){ a=a.slice(0,Math.max(0,W-b.length-1)); sp=1; } return a+' '.repeat(sp)+b; }
+  function wrap(s){
+    var out=[], line='';
+    String(s||'').split(/\s+/).forEach(function(w){
+      if(!w) return;
+      while(w.length>W){ if(line){ out.push(line); line=''; } out.push(w.slice(0,W)); w=w.slice(W); }
+      if(!w) return;
+      if(!line){ line=w; } else if((line+' '+w).length<=W){ line=line+' '+w; } else { out.push(line); line=w; }
+    });
+    if(line) out.push(line);
+    return out;
+  }
+  var sep = '-'.repeat(W);
+  var L = [];
+  L.push(c('DALLAS AVENUE'));
+  wrap('Institut de beauté & vente de produits bien-être').forEach(function(x){ L.push(c(x)); });
+  L.push(c('Nioro du Sahel, Koulouba'));
+  L.push(c('Tél : 71 74 74 15'));
+  L.push(sep);
+  L.push(lr('Facture', f.numero));
+  L.push(lr('Type', f.type==='soin' ? 'Soins' : 'Vente'));
+  L.push(lr('Date', formatDateFr(f.date)));
+  L.push(lr('Client', f.client||'-'));
+  if(f.tel) L.push(lr('Tél client', f.tel));
+  L.push(sep);
+  f.lignes.forEach(function(l){
+    wrap(l.designation).forEach(function(x){ L.push(x); });
+    L.push(lr('  '+l.qte+' x '+fmt(l.prix), fmt(l.total)));
+  });
+  L.push(sep);
+  if(f.remise){
+    L.push(lr('Sous-total', fmt(f.total+f.remise)));
+    L.push(lr('Remise', '-'+fmt(f.remise)));
+  }
+  L.push(lr('TOTAL', fmt(f.total)));
+  L.push(lr('Paiement', f.paiement||'Espèces'));
+  if(f.paiement==='Espèces' && f.recu>=f.total && f.recu>0){
+    L.push(lr('Reçu', fmt(f.recu)));
+    L.push(lr('Rendu', fmt(f.recu-f.total)));
+  }
+  L.push(sep);
+  L.push(c('BEAUTÉ - CONFIANCE - ATTITUDE'));
+  L.push(c('TikTok : Dallas Avenue'));
+  L.push(c('Merci de votre confiance'));
+  L.push('');
+  L.push('');
   return '<!doctype html><html><head><meta charset="utf-8"><title>Ticket '+escHtml(f.numero)+'</title><style>' +
     '@page{size:80mm auto;margin:0;}' +
     '*{box-sizing:border-box;}' +
-    'body{width:72mm;margin:0 auto;padding:3mm 0 8mm;font-family:Arial,Helvetica,sans-serif;color:#000;font-size:12px;line-height:1.35;}' +
-    '.c{text-align:center;}' +
-    'h1{margin:0;font-size:20px;letter-spacing:1px;}' +
-    '.sep{border-top:1px dashed #000;margin:6px 0;}' +
-    '.row{display:flex;justify-content:space-between;gap:6px;}' +
-    '.li{margin:4px 0;}' +
-    '.tot{font-size:16px;font-weight:bold;}' +
-    '.sm{font-size:11px;}' +
-    '</style></head><body>' +
-    '<div class="c"><h1>DALLAS AVENUE</h1>' +
-      '<div class="sm">Institut de beauté &amp; vente de produits bien-être</div>' +
-      '<div class="sm">Nioro du Sahel, Koulouba</div><div class="sm">Tél : 71 74 74 15</div></div>' +
-    '<div class="sep"></div>' +
-    '<div class="row"><b>Facture</b><b>'+escHtml(f.numero)+'</b></div>' +
-    '<div>Date : '+formatDateFr(f.date)+'</div>' +
-    '<div>Client : '+escHtml(f.client||'-')+'</div>' +
-    (f.tel?'<div>Tél client : '+escHtml(f.tel)+'</div>':'') +
-    '<div class="sep"></div>' + lignes + '<div class="sep"></div>' +
-    (f.remise?'<div class="row"><span>Sous-total</span><span>'+fmt(f.total+f.remise)+'</span></div><div class="row"><span>Remise</span><span>-'+fmt(f.remise)+'</span></div>':'') +
-    '<div class="row tot"><span>TOTAL</span><span>'+fmt(f.total)+'</span></div>' +
-    '<div class="sep"></div>' +
-    '<div class="c sm"><b>BEAUTÉ • CONFIANCE • ATTITUDE</b><br>TikTok : Dallas Avenue<br>Merci de votre confiance</div>' +
-    '</body></html>';
+    'html,body{margin:0;padding:0;background:#fff;color:#000;}' +
+    'pre{width:72mm;margin:0 auto;padding:2mm 0 4mm;font-family:"Courier New",Courier,monospace;font-size:2.5mm;line-height:3.2mm;white-space:pre;}' +
+    '</style></head><body><pre>'+escHtml(L.join('\n'))+'</pre></body></html>';
 }
 
 /* ================= ÉTIQUETTES DE RAYON (planche A4 à découper) ================= */
