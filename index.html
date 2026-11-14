@@ -2280,6 +2280,39 @@ function imprimerFacture(id, format){
 }
 
 
+/* ================= BON DE RÉCEPTION (produits reçus), ticket 80 mm ================= */
+function imprimerBonReception(id){
+  var a = DB.achats.find(function(x){return x.id===id;});
+  if(!a){ showToast('Achat introuvable'); return; }
+  var f = {
+    numero: 'REC-' + String(a.id).slice(-6).toUpperCase(),
+    date: a.dateRecu || a.date,
+    client: a.fournisseurNom || 'Fournisseur',
+    tel: '',
+    lignes: a.lignes.map(function(l){ return { designation:l.nom, qte:l.qte, prix:l.prixAchat, total:l.qte*l.prixAchat }; }),
+    total: a.total,
+    remise: 0,
+    paiement: '—',
+    recu: 0
+  };
+  var html = factureHtmlTicket(f)
+    .replace('<span>Facture</span>', '<span>Bon de réception</span>')
+    .replace('<div class="pay">PAIEMENT : —</div>', '<div class="pay">PRODUITS REÇUS EN STOCK</div>')
+    .replace('Merci de votre visite', 'Stock mis à jour');
+  var old = document.getElementById('printFrame');
+  if(old) old.remove();
+  var fr = document.createElement('iframe');
+  fr.id = 'printFrame';
+  fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  document.body.appendChild(fr);
+  var d = fr.contentWindow.document;
+  d.open(); d.write(html); d.close();
+  setTimeout(function(){
+    try{ fr.contentWindow.focus(); fr.contentWindow.print(); }
+    catch(e){ showToast("Impression impossible sur cet appareil"); }
+  }, 400);
+}
+
 /* ================= BOUTIQUE EN LIGNE : export boutique.json ================= */
 function listeVirgules(t){ return String(t||'').split(',').map(function(x){return x.trim();}).filter(Boolean); }
 function variantesProduit(p){
@@ -3050,6 +3083,7 @@ function achatsHtml(){
       '<div class="meta">'+a.date+' &middot; '+a.lignes.map(function(l){return escHtml(l.nom)+' &times;'+l.qte;}).join(', ')+'</div>' +
       '<div class="row" style="margin-top:6px;"><b>'+fmt(a.total)+'</b><span class="row" style="gap:6px;">' +
         (recu ? '' : '<button class="btn small" onclick="achatReceptionner(\''+a.id+'\')">Réceptionner</button>') +
+        (recu ? '<button class="icon-btn" title="Imprimer le bon de réception" onclick="imprimerBonReception(\''+a.id+'\')">&#128424;</button>' : '') +
         '<button class="icon-btn danger" onclick="achatSupprimer(\''+a.id+'\')">&#128465;</button></span></div></div>';
   }).join('') || '<div class="empty">Aucun achat enregistré.</div>';
   var enAttente = DB.achats.filter(function(a){return a.statut!=='recu';}).reduce(function(a,x){return a+x.total;},0);
