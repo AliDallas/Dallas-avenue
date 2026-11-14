@@ -3676,7 +3676,7 @@ setInterval(function(){
 loadAll().then(function(){
   chargerRdvSite().then(function(){ if(renderers.accueil) try{ renderers.accueil(); }catch(e){} });
   try{ if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(function(){}); } }catch(err){}
-  supaAssurerSession().then(function(ok){ if(ok) showLock(''); else showConnexionSupa(''); });
+  showLock('');
   startSyncPolling();
   registerPWA();
 });
